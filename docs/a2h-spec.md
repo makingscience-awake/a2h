@@ -508,6 +508,148 @@ The protocol requires that requests are never silently dropped. If a human is un
 
 ---
 
+## Channels
+
+A channel is the medium through which a request reaches a human: dashboard, Slack, email, SMS, mobile push. The A2H protocol does not define how channels render requests — that is implementation-specific. It defines what channels must declare, how agents present their identity through channels, how priority maps to channel selection, and how responses are verified.
+
+### Channel Capability Descriptor
+
+Each channel declares what it supports so the gateway can route requests appropriately:
+
+```json
+{
+  "channel_id": "slack",
+  "display_name": "Slack",
+  "capabilities": {
+    "response_types": ["choice", "approval", "text", "confirm"],
+    "max_options": 5,
+    "supports_context_card": true,
+    "supports_deadline_display": true,
+    "supports_agent_identity_badge": true,
+    "response_latency": "seconds"
+  },
+  "identity": {
+    "verification_method": "slack_user_id",
+    "trust_level": "medium"
+  }
+}
+```
+
+Response type support by common channels:
+
+| Channel | choice | approval | text | number | confirm | form |
+|---------|--------|----------|------|--------|---------|------|
+| Dashboard | yes | yes | yes | yes | yes | yes |
+| Slack | yes (max 5 buttons) | yes | yes (modal) | yes (modal) | yes | no |
+| Email | yes (links) | yes (link/reply) | yes (reply) | yes (reply) | yes (link) | no |
+| SMS | yes (numbered list) | yes (YES/NO) | yes (reply) | yes (reply) | yes (Y/N) | no |
+| Mobile push | open app | open app | no | no | open app | no |
+
+If a request requires a response type the target channel does not support, the gateway SHOULD fall back to a channel that does, or deliver via dashboard.
+
+### Agent Identity
+
+When a request arrives at a channel, the human needs to trust who is asking. The `from` field SHOULD include enough information for the channel to render an identity badge:
+
+```json
+{
+  "from": {
+    "name": "sales-pipeline-agent",
+    "namespace": "sales",
+    "participant_type": "agent",
+    "display_name": "Sales Pipeline Agent",
+    "description": "Qualifies enterprise leads and requests deal approvals",
+    "deployed_by": "sales-ops-team",
+    "platform": {
+      "name": "ForgeOS",
+      "url": "https://forgeos.acme.com",
+      "verified": true
+    }
+  }
+}
+```
+
+Channels SHOULD render this as an identity badge, for example:
+
+```
+┌──────────────────────────────────────────────┐
+│ 🤖 Sales Pipeline Agent                     │
+│ sales / sales-pipeline-agent                 │
+│ Deployed by: sales-ops-team  ✓ Verified      │
+├──────────────────────────────────────────────┤
+│ Approve the MegaInc deal at $2.5M?           │
+│                                              │
+│ Deal value: $2,500,000                       │
+│ BANT score: 87/100                           │
+│ Risk: medium                                 │
+│ Recommendation: approve                      │
+│                                              │
+│ [Approve]  [Counter]  [Reject]               │
+│                                              │
+│ ⏰ Deadline: 4 hours                         │
+└──────────────────────────────────────────────┘
+```
+
+The `verified` field indicates the platform has confirmed this agent is legitimately deployed and authorized to contact this human. Channels SHOULD display a verification indicator (checkmark, badge) when `verified` is true.
+
+A request without `platform.verified` or from an unknown platform SHOULD be displayed with a warning: "Unverified agent — exercise caution."
+
+### Priority-to-Channel Mapping
+
+The protocol defines how priority levels determine which channels are used:
+
+| Priority | Channel strategy | Behavior |
+|----------|-----------------|----------|
+| `critical` | All channels simultaneously | Maximize reach. Retry every 60s until acknowledged. |
+| `high` | Primary channel + one fallback | Should be seen within minutes. No retry. |
+| `medium` | Primary channel only | Normal workflow. No retry. |
+| `low` | Dashboard only | Batch delivery acceptable. Human checks at convenience. |
+
+The "primary channel" is the first entry in the human's `channels` list. The "fallback" is the second entry.
+
+Implementations MAY allow humans to override this mapping in their participant configuration.
+
+### Response Verification
+
+When a human responds through a channel, the system must verify the response came from the actual participant, not someone else.
+
+Each channel has a trust level based on its identity verification method:
+
+| Channel | Verification method | Trust level | Appropriate for |
+|---------|-------------------|-------------|-----------------|
+| Dashboard | Authenticated session (JWT/cookie) | `high` | All decisions including financial |
+| Slack | Slack user ID → participant mapping | `medium` | Operational decisions, approvals |
+| Email | Email address → participant mapping | `low` | Acknowledgments, low-risk approvals |
+| SMS | Phone number → participant mapping | `medium` | Confirmations, urgent approvals |
+
+The response object SHOULD include verification metadata:
+
+```json
+{
+  "response": {
+    "value": "approve"
+  },
+  "channel": "slack",
+  "verification": {
+    "method": "slack_user_id",
+    "external_id": "U04ABC123",
+    "mapped_to": "sales/sarah",
+    "trust_level": "medium"
+  }
+}
+```
+
+Implementations SHOULD enforce minimum trust levels for high-value decisions. For example: financial approvals above a threshold MUST go through a `high` trust channel (dashboard), not `low` trust (email).
+
+### Channel Security Requirements
+
+1. **Encryption in transit.** All channels MUST use TLS for delivery and response collection.
+2. **Content sensitivity.** The `context` object in requests may contain sensitive data (PII, financial figures). Channels with lower trust levels SHOULD redact sensitive context fields. A request with `context.ssn` should not be delivered via email.
+3. **Response links.** Email and SMS channels that use clickable links for responses MUST use single-use, time-limited tokens in the response URL.
+4. **Shared channels.** Slack channels shared with multiple users MUST NOT be used for A2H delivery. Only direct messages (DMs) are appropriate.
+
+---
+
 ## Relationship to A2A
 
 A2H is designed to coexist with Google's A2A protocol.

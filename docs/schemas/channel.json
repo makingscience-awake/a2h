@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forgeos.dev/a2h/v1/channel.json",
+  "title": "A2H Channel Capability Descriptor",
+  "description": "Declares what a delivery channel supports for rendering A2H requests.",
+  "type": "object",
+  "required": ["channel_id", "capabilities"],
+  "properties": {
+    "channel_id": {
+      "type": "string",
+      "description": "Unique identifier for the channel",
+      "examples": ["dashboard", "slack", "email", "sms", "mobile_push"]
+    },
+    "display_name": {
+      "type": "string",
+      "description": "Human-readable channel name"
+    },
+    "capabilities": {
+      "type": "object",
+      "properties": {
+        "response_types": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["choice", "approval", "text", "number", "confirm", "form"]
+          },
+          "description": "Which response types this channel can render"
+        },
+        "max_options": {
+          "type": "integer",
+          "description": "Maximum number of choice options the channel can display"
+        },
+        "supports_context_card": {
+          "type": "boolean",
+          "description": "Whether the channel can render structured context data",
+          "default": false
+        },
+        "supports_deadline_display": {
+          "type": "boolean",
+          "description": "Whether the channel can show a deadline countdown",
+          "default": false
+        },
+        "supports_agent_identity_badge": {
+          "type": "boolean",
+          "description": "Whether the channel can render agent identity verification",
+          "default": false
+        },
+        "response_latency": {
+          "type": "string",
+          "enum": ["seconds", "minutes", "hours"],
+          "description": "Typical time between delivery and human seeing the request"
+        }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "properties": {
+        "verification_method": {
+          "type": "string",
+          "description": "How the channel verifies human identity on response",
+          "examples": ["authenticated_session", "slack_user_id", "email_address", "phone_number"]
+        },
+        "trust_level": {
+          "type": "string",
+          "enum": ["high", "medium", "low"],
+          "description": "How much trust can be placed in responses from this channel"
+        }
+      }
+    }
+  }
+}

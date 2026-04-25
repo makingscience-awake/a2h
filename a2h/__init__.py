@@ -40,12 +40,28 @@ from .models import (
 )
 from .gateway import Gateway
 from .store import InMemoryStore, Store
-from .channels import Channel, LogChannel
+from .channels import (
+    AgentIdentity,
+    Channel,
+    ChannelCapability,
+    DashboardChannel,
+    DASHBOARD_CAPABILITY,
+    EMAIL_CAPABILITY,
+    LogChannel,
+    ResponseVerification,
+    SLACK_CAPABILITY,
+    SMS_CAPABILITY,
+)
 
 __version__ = "0.1.0"
 __all__ = [
+    "AgentIdentity",
     "Channel",
+    "ChannelCapability",
+    "DashboardChannel",
+    "DASHBOARD_CAPABILITY",
     "DelegationRule",
+    "EMAIL_CAPABILITY",
     "EscalationChain",
     "EscalationLevel",
     "Gateway",
@@ -57,6 +73,9 @@ __all__ = [
     "Priority",
     "Response",
     "ResponseType",
+    "ResponseVerification",
+    "SLACK_CAPABILITY",
+    "SMS_CAPABILITY",
     "Status",
     "Store",
 ]
