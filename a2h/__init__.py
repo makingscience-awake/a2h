@@ -53,8 +53,39 @@ from .channels import (
     SMS_CAPABILITY,
 )
 
+from .errors import (
+    A2HError,
+    ChannelDeliveryFailed,
+    ExecutionMismatch,
+    InvalidResponseType,
+    NoSupportedChannel,
+    ParticipantNotFound,
+    ParticipantUnavailable,
+    RateLimitExceeded,
+    RequestExpired,
+    RequestNotFound,
+    RequestNotPending,
+    SignatureInvalid,
+    TrustLevelInsufficient,
+)
+
 __version__ = "0.1.0"
 __all__ = [
+    # Errors
+    "A2HError",
+    "ChannelDeliveryFailed",
+    "ExecutionMismatch",
+    "InvalidResponseType",
+    "NoSupportedChannel",
+    "ParticipantNotFound",
+    "ParticipantUnavailable",
+    "RateLimitExceeded",
+    "RequestExpired",
+    "RequestNotFound",
+    "RequestNotPending",
+    "SignatureInvalid",
+    "TrustLevelInsufficient",
+    #
     "AgentIdentity",
     "Channel",
     "ChannelCapability",
