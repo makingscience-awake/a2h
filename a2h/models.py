@@ -356,9 +356,12 @@ class DelegationRule:
             actual = interaction.context.get(key)
             if actual is None:
                 return False
-            if "lt" in cond and not (float(actual) < float(cond["lt"])):
-                return False
-            if "gt" in cond and not (float(actual) > float(cond["gt"])):
+            try:
+                if "lt" in cond and not (float(actual) < float(cond["lt"])):
+                    return False
+                if "gt" in cond and not (float(actual) > float(cond["gt"])):
+                    return False
+            except (ValueError, TypeError):
                 return False
             if "eq" in cond and actual != cond["eq"]:
                 return False

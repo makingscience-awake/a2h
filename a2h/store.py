@@ -87,6 +87,21 @@ class InMemoryStore:
         event = self._events.get(interaction_id)
         if not event:
             return None
+            
+        interaction = self.get(interaction_id)
+        if interaction and interaction.deadline:
+            from datetime import datetime, timezone
+            try:
+                deadline_dt = datetime.fromisoformat(interaction.deadline)
+                now = datetime.now(timezone.utc)
+                time_left = (deadline_dt - now).total_seconds()
+                if time_left <= 0:
+                    interaction.status = Status.EXPIRED
+                    return interaction
+                timeout = min(timeout, max(0.1, time_left))
+            except (ValueError, TypeError):
+                pass
+                
         try:
             await asyncio.wait_for(event.wait(), timeout=timeout)
         except asyncio.TimeoutError:

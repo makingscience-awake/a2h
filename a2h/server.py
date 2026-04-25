@@ -114,6 +114,8 @@ def create_app(gateway):
     @app.get("/a2h/v1/requests")
     async def list_requests(to: str | None = None, status: str | None = None):
         pending = gateway.list_pending(to)
+        if status:
+            pending = [i for i in pending if i.status.value == status]
         return {"requests": [i.to_dict() for i in pending]}
 
     @app.post("/a2h/v1/notifications", status_code=201)

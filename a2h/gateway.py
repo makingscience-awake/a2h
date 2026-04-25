@@ -137,6 +137,7 @@ class Gateway:
             )
             interaction.status = Status.CANCELLED
             interaction.context["error"] = f"Participant {to} not found"
+            self._store.save(interaction)
             return interaction
 
         # State-aware routing
@@ -165,18 +166,21 @@ class Gateway:
         interaction.status = Status.PENDING
 
         # Check delegation rules
+        auto_delegate_rule = None
         for rule in target.delegation_rules:
             if rule.matches(interaction):
-                interaction.response = Response.from_dict(rule.auto_response)
-                interaction.response.channel = "auto_delegation"
-                interaction.status = Status.AUTO_DELEGATED
-                logger.info("A2H auto-delegated: %s (rule: %s)", interaction.id, rule.name)
+                auto_delegate_rule = rule
                 break
 
         self._store.save(interaction)
 
-        # Deliver (if not auto-delegated)
-        if interaction.status == Status.PENDING:
+        if auto_delegate_rule:
+            logger.info("A2H auto-delegated: %s (rule: %s)", interaction.id, auto_delegate_rule.name)
+            self.respond(interaction.id, auto_delegate_rule.auto_response, channel="auto_delegation")
+            # Ensure status is set to AUTO_DELEGATED instead of just ANSWERED
+            interaction.status = Status.AUTO_DELEGATED
+        else:
+            # Deliver (if not auto-delegated)
             await self._deliver(interaction)
 
         return interaction
@@ -262,8 +266,18 @@ class Gateway:
 
     async def wait(self, interaction_id: str, timeout: float = 300) -> Interaction | None:
         """Block until the human responds or timeout."""
-        if isinstance(self._store, InMemoryStore):
-            return await self._store.wait(interaction_id, timeout)
+        if hasattr(self._store, "wait") and callable(getattr(self._store, "wait")):
+            return await getattr(self._store, "wait")(interaction_id, timeout)
+            
+        # Fallback polling for stores without wait()
+        import asyncio
+        import time
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            interaction = self._store.get(interaction_id)
+            if not interaction or interaction.status != Status.PENDING:
+                return interaction
+            await asyncio.sleep(1.0)
         return self._store.get(interaction_id)
 
     # ---- Internal ----------------------------------------------------------

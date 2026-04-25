@@ -63,7 +63,11 @@ class CallbackRegistry:
         if result.get("success"):
             interaction = self._gw.get(request_id)
             if interaction:
-                asyncio.ensure_future(self._fire(interaction))
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(self._fire(interaction))
+                except RuntimeError:
+                    asyncio.run(self._fire(interaction))
 
         return result
 
