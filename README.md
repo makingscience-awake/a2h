@@ -273,37 +273,78 @@ class PostgresStore:
 gw = Gateway(store=PostgresStore(dsn="postgresql://..."))
 ```
 
-## Real-World Example: Enterprise Deal Pipeline
+## Real-World Example: Customer Support Complaint
+
+A customer (Jane Smith, Premium tier) was charged twice for her $499 annual subscription. She's angry — this is her 3rd contact. The support agent investigates and routes decisions to the right humans.
 
 ```
-┌──────────────┐        ┌──────────────┐        ┌──────────────┐
-│  Lead        │  A2A   │  Deal        │  A2A   │  Risk        │
-│  Researcher  │───────►│  Analyst     │───────►│  Assessor    │
-│  (agent)     │        │  (agent)     │        │  (agent)     │
-└──────┬───────┘        └──────────────┘        └──────────────┘
-       │
-       │ A2H: "Approve MegaInc at $2.5M?"
-       │ response_type: choice
-       │ context: {bant: 87, risk: medium}
-       │ deadline: 4h
-       ▼
-┌──────────────┐
-│  Sarah       │  responds via Slack: "Approve"
-│  VP Sales    │
-│  (human)     │
-└──────┬───────┘
-       │
-       │ A2H: "Budget sign-off for $2.5M?"
-       │ escalation: sarah(10min) → tom(30min)
-       ▼
-┌──────────────┐
-│  David       │  responds via email: "Approved with conditions"
-│  CFO         │
-│  (human)     │
-└──────────────┘
+┌──────────────┐                                             
+│  Support     │  Step 2: confirm duplicate charge            
+│  Agent       │──────A2H (confirm)──────► Maria (Support Agent)
+│  (AI)        │                            ✓ "Confirmed"     
+│              │                                              
+│              │  Step 3: approve $499 refund                 
+│              │──────A2H (approval)─────► Rachel (Team Lead) 
+│              │  escalation:               ✓ "Approved"      
+│              │  rachel(30m)→david(60m)                       
+│              │                                              
+│              │  Step 4: choose compensation                 
+│              │──────A2H (choice)───────► Rachel             
+│              │  options:                  ✓ "2 months free" 
+│              │  [1mo│2mo│none│custom]                       
+│              │                                              
+│              │  Step 5: waive $15 late fee                  
+│              │──────A2H (approval)─────► Rachel             
+│              │  $15 < $100 rule           ✓ AUTO-DELEGATED  
+│              │                            (no human action) 
+│              │                                              
+│              │  Step 6: resolution notification             
+│              │──────A2H (notify)───────► Maria              
+│              │  "Refund+credit processed.  (no response)    
+│              │   Call Jane to confirm."                      
+│              │                                              
+│              │  Step 7: finance notification                
+│              │──────A2H (notify)───────► David (Finance)    
+│              │  "$597.17 total adjustment" (no response)    
+└──────────────┘                                              
 ```
 
-Three agents collaborate via A2A. When they need human decisions, they use A2H. The protocol handles structured questions, deadlines, escalation, and auto-delegation — the agents don't need to know which channel the human uses or how long they'll take.
+**Result:** 3 humans involved, but only **3 actual human actions** needed. The $15 late fee was auto-approved by Rachel's delegation rule. The agent handled all investigation, routing, and follow-up.
+
+```python
+# Step 3: Agent asks Rachel to approve the refund
+req = await gw.ask("support/rachel",
+    question="Approve refund of $499 for ticket #4521?",
+    response_type="approval",
+    priority="high",
+    deadline="2h",
+    escalation=EscalationChain(levels=[
+        EscalationLevel(target="support/rachel", timeout_minutes=30),
+        EscalationLevel(target="finance/david", timeout_minutes=60,
+                        priority_override="critical"),
+    ]),
+    context={
+        "ticket_id": "4521",
+        "refund_amount": 499,
+        "customer": "Jane Smith",
+        "tier": "Premium",
+        "lifetime_value": 14000,
+        "reason": "duplicate_charge",
+    },
+    from_name="support-bot",
+)
+
+# Step 5: $15 waiver auto-delegated (Rachel's rule: < $100 = auto-approve)
+req = await gw.ask("support/rachel",
+    question="Waive $15 late fee?",
+    response_type="approval",
+    context={"refund_amount": 15},
+    from_name="support-bot",
+)
+# req.status = Status.AUTO_DELEGATED (no human action needed)
+```
+
+Run the full example: `python examples/customer_support.py`
 
 ## Protocol Specification
 
