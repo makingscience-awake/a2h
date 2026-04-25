@@ -1,0 +1,66 @@
+# A2H Skills for OpenClaw agents
+#
+# Point these at your A2H server endpoint.
+# Set A2H_SERVER_URL and A2H_PLATFORM_TOKEN in your environment.
+#
+# Usage in SOUL.md:
+#   "When you need human approval, use 'ask a human'"
+#   "To send status updates, use 'notify a human'"
+
+- name: human_ask
+  trigger: "ask a human"
+  description: >
+    Ask a human a structured question and get their response.
+    Use for approvals, decisions, choices, and confirmations.
+    The human responds via their preferred channel (Slack, dashboard, email).
+  method: POST
+  endpoint: "${A2H_SERVER_URL}/a2h/v1/requests"
+  headers:
+    Content-Type: "application/json"
+    Authorization: "Bearer ${A2H_PLATFORM_TOKEN}"
+  body:
+    to: "${namespace}/${name}"
+    question: "${question}"
+    response_type: "${response_type}"
+    options: "${options}"
+    context: "${context}"
+    priority: "${priority}"
+    from_name: "${agent_name}"
+    from_namespace: "${agent_namespace}"
+
+- name: human_check
+  trigger: "check human response"
+  description: >
+    Check if a human has responded to a pending request.
+    Use the request_id returned by 'ask a human'.
+  method: GET
+  endpoint: "${A2H_SERVER_URL}/a2h/v1/requests/${request_id}"
+  headers:
+    Authorization: "Bearer ${A2H_PLATFORM_TOKEN}"
+
+- name: human_notify
+  trigger: "notify a human"
+  description: >
+    Send a notification to a human. No response needed.
+    Use for status updates, reports, alerts, and completion notices.
+  method: POST
+  endpoint: "${A2H_SERVER_URL}/a2h/v1/notifications"
+  headers:
+    Content-Type: "application/json"
+    Authorization: "Bearer ${A2H_PLATFORM_TOKEN}"
+  body:
+    to: "${namespace}/${name}"
+    message: "${message}"
+    severity: "${severity}"
+    priority: "${priority}"
+    from_name: "${agent_name}"
+    from_namespace: "${agent_namespace}"
+
+- name: human_list
+  trigger: "list available humans"
+  description: >
+    Discover available humans you can contact.
+  method: GET
+  endpoint: "${A2H_SERVER_URL}/.well-known/participants.json"
+  headers:
+    Authorization: "Bearer ${A2H_PLATFORM_TOKEN}"
