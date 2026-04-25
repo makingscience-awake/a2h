@@ -75,6 +75,82 @@ Human delegates task to agent        (H2A — A2A from a UI)
 
 ---
 
+## Why A2H Is Not "Slow A2A"
+
+A2A was designed for agents — entities that process requests in milliseconds, handle thousands concurrently, never tire, and don't care how information is formatted. A2H exists because humans are fundamentally different from agents in ways that change every aspect of protocol design.
+
+### Humans have limited attention
+
+An agent can process 100 concurrent requests. A human gets overwhelmed after 5 pending items. Research shows the average knowledge worker can hold 4±1 items in working memory.
+
+**Protocol implication:** A2H must protect humans from agent spam. Budget limits on A2H requests aren't about compute cost — they're about the most expensive resource in the system: human attention. An agent that sends 50 questions per hour to the same human is not "high throughput" — it's a denial-of-service attack on a person.
+
+This is why delegation rules exist. If 80% of an agent's questions have predictable answers, those should be auto-delegated — not because the human can't answer them, but because answering routine questions consumes attention that should be spent on the 20% that actually require human judgment.
+
+### Context switching is expensive
+
+An agent switches between tasks in microseconds. A human needs 15-23 minutes to regain deep focus after an interruption (University of California research). Every A2H request is an interruption.
+
+**Protocol implication:** Priority levels aren't just about urgency — they're about interruption cost. A `critical` request justifies the interruption. A `low` request does not. This is why low-priority requests go to dashboard only with batch delivery: the human checks them when they naturally switch context, not when the agent wants an answer.
+
+The channel selection system exists for the same reason. Slack DMs interrupt. Email doesn't. Dashboard notifications wait. The protocol routes based on whether the decision is worth interrupting the human's current work.
+
+### Decision quality degrades over time
+
+An agent's 1000th decision is as reliable as its 1st. A human's quality degrades through the day — a phenomenon called decision fatigue. A study of Israeli judges found that favorable rulings dropped from 65% to nearly 0% before breaks, then reset after.
+
+**Protocol implication:** Auto-delegation rules aren't just convenience — they're a quality mechanism. Routine approvals processed at 4pm by a fatigued human are less reliable than the same approvals auto-delegated by a rule. The protocol preserves human decision-making capacity for decisions that genuinely need it.
+
+### Humans need to understand why
+
+An agent receives a JSON object and processes it. A human needs to understand the question, the context, the stakes, and the recommendation before they can decide well.
+
+**Protocol implication:** The `context` object isn't optional metadata — it's the difference between an informed decision and a rubber stamp. When an agent asks "Approve this deal?", the human needs to see: deal value, customer score, risk assessment, the agent's own recommendation, and supporting data. Without context, the human either approves blindly (dangerous) or goes looking for information (slow).
+
+This is why A2H has structured response types with options and descriptions — not because humans can't type, but because "Approve / Counter / Reject" with descriptions leads to better decisions than a blank text field.
+
+### Availability is biological, not technical
+
+An agent is available or crashed — two states. A human has a dozen states driven by biology and social obligations: sleeping, eating, in a meeting, on a call, on break, focused on deep work, commuting, on vacation, sick, in a different timezone.
+
+**Protocol implication:** The state machine isn't a feature — it's a necessity. "Busy → queue" means "I'm in a meeting, hold my requests." "Away → reroute to delegate" means "I'm on vacation, send to my backup." These aren't edge cases — they're the majority of a human's day. An A2A protocol that assumes the target is always available would fail within the first hour of real operation.
+
+### Escalation is social, not technical
+
+When an A2A call fails, the agent retries or falls back to a different agent. No feelings involved. When an A2H request escalates — "Sarah didn't respond in 10 minutes, asking Tom instead" — that's going over Sarah's head. It has social consequences.
+
+**Protocol implication:** Escalation chains must be transparent and predefined. The human agrees in advance: "If I don't respond in 10 minutes, escalate to Tom." The escalation is visible to both parties. There's no hidden retry — the protocol explicitly moves the request to a new target with an `escalated` status.
+
+This is also why escalation has priority override. "I'm asking Tom because Sarah didn't respond, and this is now critical" — the escalation itself changes the priority because delay has made the situation more urgent.
+
+### Humans batch naturally
+
+An agent processes requests one at a time, in order. A human opens their dashboard and sees 8 pending requests. They scan all 8, mentally prioritize based on context the system doesn't have ("I know this customer, they can wait; this other one is about to churn"), and process them in an order the system didn't predict.
+
+**Protocol implication:** Low-priority delivery via dashboard with "batch OK" isn't a technical optimization — it's respecting how humans actually work. The pending request list is a batch queue. The human is the scheduler. The protocol provides priority hints, but the human reorders based on knowledge the agent doesn't have.
+
+### Trust is visual, not cryptographic
+
+Agents verify each other through ACLs, tokens, and platform-level authentication. Humans verify through visual cues: "I recognize this bot," "it has a verified badge," "it's from our ForgeOS platform." If a human gets a Slack DM from an unknown bot asking them to approve a $2M transaction, they should be suspicious.
+
+**Protocol implication:** Agent identity cards with verification badges aren't a nice-to-have — they're a security requirement. The `verified` flag, platform URL, and deployer name give humans the visual trust signals they need to decide whether to engage. An unverified request should look different from a verified one — the channel must make this visible.
+
+### The cost equation is completely different
+
+| | A2A | A2H |
+|---|---|---|
+| Cost of a request | Tokens + compute (~$0.01) | Human attention (~minutes of salary) |
+| Cost of interruption | None | 15-23 minutes of focus recovery |
+| Cost of a bad decision | Retry is cheap | May be irreversible (approved wrong deal) |
+| Cost of delay | Milliseconds | Hours (but sometimes acceptable) |
+| Scarcest resource | GPU time | Human judgment |
+
+Every A2H design decision follows from this table. Structured questions reduce decision time. Context cards reduce research time. Delegation rules eliminate unnecessary decisions. Priority routing minimizes interruptions. Trust badges prevent bad decisions based on spoofed identity.
+
+A2H is not a slower version of A2A. It is a protocol designed around the fundamental nature of its most important participant: the human being.
+
+---
+
 ## Key Concepts
 
 ### Participant
