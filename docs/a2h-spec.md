@@ -553,6 +553,276 @@ The agent sees the escalation via the status endpoint or SSE events.
 
 ---
 
+## Trust & Security
+
+### The Trust Chain
+
+When a human receives an A2H request through Slack, email, or a dashboard, they're trusting a chain — not a single entity:
+
+```
+Human ← trusts ← Channel ← trusts ← Platform ← trusts ← Agent
+
+"I trust this Slack message        "Our IT admin installed
+ because it's from our              this bot and linked it
+ verified ForgeOS bot"              to our ForgeOS platform"
+
+                                   "ForgeOS deployed this      "The admission controller
+                                    agent through its           validated my manifest,
+                                    admission controller"       kernel enforces my permissions"
+```
+
+**If any link breaks, the entire chain fails.** A rogue Slack bot can impersonate the platform. A compromised platform can vouch for malicious agents. An unverified agent can lie about its context. Every link must be verified.
+
+### Platform Registration
+
+Before any A2H request can flow through a channel, the platform MUST register with that channel. Registration establishes the platform's identity so the channel can verify future requests.
+
+```json
+{
+  "platform_id": "forgeos-acme",
+  "platform_name": "ForgeOS",
+  "platform_url": "https://forgeos.acme.com",
+  "signing_public_key": "-----BEGIN PUBLIC KEY-----...",
+  "channels": [
+    {
+      "channel_id": "slack",
+      "workspace": "acme-corp.slack.com",
+      "bot_id": "B04ABC123",
+      "installed_by": "it-admin@acme.com",
+      "installed_at": "2026-01-15"
+    },
+    {
+      "channel_id": "email",
+      "domain": "forgeos-notifications.acme.com",
+      "dkim_selector": "a2h",
+      "spf_record": "v=spf1 include:forgeos.acme.com ~all"
+    }
+  ]
+}
+```
+
+How this works in practice:
+
+| Channel | How platform registers | How human recognizes it |
+|---------|----------------------|----------------------|
+| Slack | IT admin installs the ForgeOS bot in the workspace | Messages come from the known bot with its icon and name |
+| Email | DNS records (SPF/DKIM) verify the sender domain | Gmail/Outlook shows verified sender badge |
+| Dashboard | The dashboard IS the platform (same origin) | Human is already authenticated on the platform |
+| SMS | Platform registers a short code or verified number | Messages come from a recognized number |
+
+### Request Signing
+
+Every A2H request SHOULD be signed by the platform so the channel can verify it was not spoofed or tampered with:
+
+```json
+{
+  "protocol": "a2h/v1",
+  "id": "req_7f3a2b",
+  "from": {"name": "sales-agent", "namespace": "sales"},
+  "to": {"name": "sarah", "namespace": "sales"},
+  "content": {
+    "question": "Approve the $2.5M deal?",
+    "context": {"deal_value": 2500000}
+  },
+  "platform_signature": {
+    "platform_id": "forgeos-acme",
+    "signed_at": "2026-04-25T12:00:00Z",
+    "algorithm": "Ed25519",
+    "signature": "base64:...",
+    "signed_fields": ["id", "from", "to", "content", "priority", "deadline"]
+  }
+}
+```
+
+The channel verifies the signature against the platform's public key (established during registration). Behavior:
+
+| Signature status | Channel renders |
+|-----------------|----------------|
+| Valid | Normal request with verified badge (✓) |
+| Invalid / missing | Warning: "⚠️ Unverified request — may not be from ForgeOS" |
+| Unknown platform | Blocked or strong warning: "🚫 Unknown source" |
+
+For Level 3 (critical) operations, requests with invalid or missing signatures MUST NOT be delivered.
+
+### Agent Trust Levels
+
+The platform — not the agent — determines the agent's trust level based on how it was deployed:
+
+| Trust level | Badge | How the agent got this level | What it means |
+|-------------|-------|----------------------------|---------------|
+| **Verified** | ✓ green | Deployed through admission controller. Manifest validated. Kernel enforces permissions. | The platform fully vouches for this agent. |
+| **Known** | — grey | Registered but not admission-controlled (e.g., external A2A agent forwarding an A2H request). | The platform recognizes this agent but hasn't fully verified it. |
+| **Unknown** | ⚠️ warning | No platform registration. | The human should not trust this agent without contacting IT. |
+
+The trust level is set by the platform when the agent is deployed, not by the agent itself. An agent CANNOT set its own trust level.
+
+### Security Levels
+
+Operations are classified by risk. Each level has requirements for context verification, channel trust, and response binding:
+
+```
+Level 0 — Informational
+  Notifications, status updates, reports.
+  No response needed.
+  Any channel. No verification required.
+
+Level 1 — Advisory
+  Low-risk decisions: scheduling preferences, content review, prioritization.
+  Agent-supplied context is acceptable.
+  Any channel trust level.
+
+Level 2 — Operational
+  Medium-risk decisions: team assignments, process approvals, budget < threshold.
+  Platform-verified context RECOMMENDED.
+  Medium+ trust channel RECOMMENDED.
+
+Level 3 — Critical
+  High-risk decisions: financial transactions, access grants, data deletion,
+  legal commitments, compliance sign-offs.
+  Platform-verified context REQUIRED.
+  High trust channel REQUIRED (dashboard).
+  Request signing REQUIRED.
+  Response binding REQUIRED.
+  Post-approval execution verification REQUIRED.
+```
+
+### Platform-Verified Context
+
+For Level 2-3 operations, the context shown to the human should be verified by the platform, not self-reported by the agent. The difference:
+
+**Agent-supplied context (Level 0-1):**
+```json
+{
+  "context": {
+    "deal_value": 2500000,
+    "verified_by": null
+  }
+}
+```
+The agent wrote this. It might be accurate. It might not be.
+
+**Platform-verified context (Level 2-3):**
+```json
+{
+  "context": {
+    "deal_value": 2500000,
+    "verified_by": "kernel",
+    "verification": {
+      "source": "tool_parameters",
+      "tool": "wallet_transfer",
+      "actual_parameters": {"amount": 2500000, "to": "0x742d..."},
+      "matched_request": true
+    }
+  }
+}
+```
+The kernel intercepted the tool call, extracted the actual parameters, and confirmed they match what the agent claims in the request. The human sees "Verified by kernel ✓" next to the context data.
+
+This prevents the attack where an agent asks "Approve $500 transfer?" but actually executes a $50,000 transfer. The kernel verifies the tool parameters match the A2H context before delivery.
+
+### Response Binding
+
+For Level 3 operations, the human's response MUST be cryptographically bound to the specific request, preventing replay attacks:
+
+```json
+{
+  "response": {
+    "value": "approve"
+  },
+  "channel": "dashboard",
+  "binding": {
+    "request_hash": "sha256:abc123...",
+    "request_id": "req_7f3a2b",
+    "bound_fields": ["content.question", "content.context.deal_value"],
+    "responded_at": "2026-04-25T12:15:00Z"
+  }
+}
+```
+
+The `request_hash` is a hash of the signed request content. The gateway verifies:
+1. The hash matches the original request
+2. The `request_id` matches
+3. The response hasn't been used before (single-use)
+
+This prevents an attacker from capturing an "approve" response and replaying it against a different request.
+
+### Post-Approval Execution Verification
+
+For Level 3 operations, after the human approves, the platform MUST verify that the agent's actual operation matches what was approved:
+
+```
+Human approved: "Transfer 0.5 ETH to 0x742d..."
+Agent attempts: wallet_transfer(amount=0.5, to="0x742d...")
+Kernel checks:  approved_amount == actual_amount? ✓
+                approved_to == actual_to? ✓
+                → ALLOW execution
+
+Agent attempts: wallet_transfer(amount=5.0, to="0x999...")
+Kernel checks:  approved_amount (0.5) != actual_amount (5.0)
+                → BLOCK execution
+                → Alert: "Agent attempted operation that doesn't match approval"
+```
+
+This closes the gap where a human approves based on context, but the agent executes something different.
+
+### Human Verification Guidance
+
+The spec recommends that implementations display guidance to humans based on security level:
+
+**Level 1-2 (routine decisions):**
+```
+✓ Verified agent from ForgeOS
+  Review the request and respond when convenient.
+```
+
+**Level 3 (critical decisions):**
+```
+⚠️ Critical decision — verify before responding:
+
+  1. Do you recognize this agent?
+     "Sales Pipeline Agent" — deployed by sales-ops team
+
+  2. Does the amount/operation match what you expect?
+     Transfer: 0.5 ETH to 0x742d...
+     Context verified by kernel ✓
+
+  3. Are you on a trusted channel?
+     Dashboard (authenticated session) ✓
+
+  4. Is the deadline reasonable?
+     4 hours — not rushed
+
+  [Approve]  [Reject]  [Escalate to Manager]
+```
+
+**Unverified request:**
+```
+🚫 UNVERIFIED REQUEST
+
+  This request could not be verified by the platform.
+  Do NOT approve without contacting IT.
+
+  Claimed sender: "sales-agent" on ForgeOS
+  Verification: FAILED — signature invalid
+
+  [Report to IT]  [Dismiss]
+```
+
+### Rate Limiting
+
+To prevent agents from overwhelming humans with requests:
+
+| Limit | Default | Purpose |
+|-------|---------|---------|
+| Max requests per agent per hour | 10 | Prevents agent spam |
+| Max critical requests per agent per day | 5 | Protects human attention for high-value decisions |
+| Cooldown between requests to same human | 5 minutes | Prevents rapid-fire interruptions |
+| Max concurrent pending per human | 20 | Prevents queue overflow |
+
+Implementations SHOULD enforce these limits at the gateway level. Requests exceeding limits receive a `rate_limit` status.
+
+---
+
 ## Human Availability
 
 The protocol defines an optional availability model. Implementations that support it route requests based on the human's current state.

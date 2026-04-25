@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forgeos.dev/a2h/v1/platform-registration.json",
+  "title": "A2H Platform Registration",
+  "description": "Establishes platform identity with delivery channels for request signing and verification.",
+  "type": "object",
+  "required": ["platform_id", "platform_name", "signing_public_key"],
+  "properties": {
+    "platform_id": {
+      "type": "string",
+      "description": "Unique identifier for the platform instance"
+    },
+    "platform_name": {
+      "type": "string",
+      "description": "Human-readable platform name"
+    },
+    "platform_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "Platform dashboard/admin URL"
+    },
+    "signing_public_key": {
+      "type": "string",
+      "description": "Public key for verifying request signatures (PEM format)"
+    },
+    "signing_algorithm": {
+      "type": "string",
+      "enum": ["Ed25519", "RSA-SHA256", "ECDSA-P256"],
+      "default": "Ed25519"
+    },
+    "channels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["channel_id"],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "description": "Which channel this registration covers"
+          },
+          "workspace": {
+            "type": "string",
+            "description": "For Slack: workspace domain"
+          },
+          "bot_id": {
+            "type": "string",
+            "description": "For Slack: bot user ID"
+          },
+          "domain": {
+            "type": "string",
+            "description": "For email: verified sender domain"
+          },
+          "dkim_selector": {
+            "type": "string",
+            "description": "For email: DKIM selector"
+          },
+          "phone_number": {
+            "type": "string",
+            "description": "For SMS: verified sender number or short code"
+          },
+          "installed_by": {
+            "type": "string",
+            "description": "Who registered this channel (admin identity)"
+          },
+          "installed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    "registered_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}
