@@ -438,3 +438,10 @@ pip install a2h[server]      # with FastAPI HTTP transport
 ## License
 
 Apache 2.0
+
+## Demos
+
+Check out the interactive HTML demos to see A2H in action:
+- [Basic Demo](demo.html)
+- [Call Center Demo](demo-call-center.html)
+- [Content Moderation Demo](demo-moderation.html)
