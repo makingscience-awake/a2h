@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A2H Demo — Incident Response War Room</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}body{background:#0d1117;color:#c9d1d9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px}
+.header{padding:10px 20px;border-bottom:1px solid #21262d;display:flex;justify-content:space-between;align-items:center}
+.header h1{font-size:18px;color:#f0f6fc}.header h1 span{color:#8b949e;font-weight:400;font-size:13px}
+.alert-banner{background:#3a1a1a;border:1px solid #da3633;padding:8px 20px;font-size:12px;color:#f85149;display:none;animation:blink 1s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.7}}
+.main{display:grid;grid-template-columns:1fr 1fr 280px;height:calc(100vh - 80px)}
+.col{padding:10px;overflow-y:auto;border-right:1px solid #21262d}
+.col:last-child{border:none;background:#161b22}
+.col h3{font-size:10px;color:#484f58;text-transform:uppercase;letter-spacing:1px;margin:8px 0 6px}
+
+.metric{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:10px;margin:4px 0}
+.metric .label{font-size:10px;color:#8b949e}.metric .value{font-size:24px;font-weight:800;margin:2px 0}
+.metric .change{font-size:10px}
+.metric.danger{border-color:#da3633}.metric.danger .value{color:#f85149}
+.metric.warning{border-color:#d29922}.metric.warning .value{color:#e3b341}
+.metric.ok .value{color:#3fb950}
+
+.timeline-item{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:8px 10px;margin:4px 0;font-size:11px;animation:fadeIn 0.3s;position:relative;padding-left:24px}
+@keyframes fadeIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}
+.timeline-item::before{content:'';position:absolute;left:8px;top:50%;width:8px;height:8px;border-radius:50%;transform:translateY(-50%)}
+.timeline-item.info::before{background:#58a6ff}.timeline-item.alert::before{background:#f85149}
+.timeline-item.action::before{background:#3fb950}.timeline-item.escalation::before{background:#bc8cff}
+.timeline-item .time{color:#484f58;font-size:9px}.timeline-item .msg{color:#f0f6fc;margin:2px 0}
+
+.a2h-card{background:#161b22;border:2px solid #8957e5;border-radius:10px;padding:10px;margin:6px 0;animation:fadeIn 0.3s}
+.a2h-card .from{font-size:10px;color:#3fb950}.a2h-card .q{font-size:12px;color:#f0f6fc;font-weight:600;margin:4px 0}
+.a2h-card .ctx{background:#0d1117;border-radius:6px;padding:6px 8px;margin:4px 0;font-size:10px;color:#8b949e}
+.a2h-card .timer{color:#f85149;font-weight:700;font-size:12px;animation:blink 1s infinite}
+.btn{padding:5px 12px;border-radius:5px;border:none;font-size:10px;font-weight:600;cursor:pointer;margin:2px}
+.btn-danger{background:#da3633;color:#fff}.btn-warn{background:#d29922;color:#fff}.btn-ok{background:#238636;color:#fff}.btn-ghost{background:#21262d;color:#c9d1d9;border:1px solid #30363d}
+.btn:hover{opacity:0.85}
+.resolved{opacity:0.4;border-color:#238636}
+.resolved .timer{display:none}
+
+.service{background:#21262d;border-radius:6px;padding:6px 8px;margin:2px 0;font-size:10px;display:flex;justify-content:space-between;align-items:center}
+.service .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px}
+.dot-up{background:#3fb950}.dot-degraded{background:#e3b341}.dot-down{background:#f85149}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Incident Response <span>— P1 War Room</span></h1>
+  <div style="display:flex;gap:12px;font-size:12px">
+    <span>Status: <strong id="status" style="color:#3fb950">OPERATIONAL</strong></span>
+    <span>On-call: <strong>Alex Chen</strong></span>
+  </div>
+</div>
+<div class="alert-banner" id="alert-banner">🚨 P1 INCIDENT — Production outage detected. Error rate 5x baseline. War room active.</div>
+
+<div class="main">
+  <div class="col">
+    <h3>Live Metrics</h3>
+    <div id="metrics">
+      <div class="metric ok"><div class="label">Error Rate</div><div class="value" id="m-err">0.2%</div><div class="change" style="color:#3fb950">Normal</div></div>
+      <div class="metric ok"><div class="label">Latency (p99)</div><div class="value" id="m-lat">120ms</div><div class="change" style="color:#3fb950">Normal</div></div>
+      <div class="metric ok"><div class="label">Requests/min</div><div class="value" id="m-rps">2,400</div><div class="change" style="color:#3fb950">Normal</div></div>
+      <div class="metric ok"><div class="label">Affected Users</div><div class="value" id="m-users">0</div></div>
+    </div>
+    <h3>Services</h3>
+    <div id="services">
+      <div class="service"><span><span class="dot dot-up"></span>API Gateway</span><span style="color:#3fb950">UP</span></div>
+      <div class="service"><span><span class="dot dot-up"></span>Auth Service</span><span style="color:#3fb950">UP</span></div>
+      <div class="service"><span><span class="dot dot-up"></span>Payment Service</span><span style="color:#3fb950">UP</span></div>
+      <div class="service"><span><span class="dot dot-up"></span>Database</span><span style="color:#3fb950">UP</span></div>
+      <div class="service"><span><span class="dot dot-up"></span>CDN</span><span style="color:#3fb950">UP</span></div>
+    </div>
+  </div>
+
+  <div class="col">
+    <h3>Timeline</h3>
+    <div id="timeline"></div>
+    <h3>A2H Decisions</h3>
+    <div id="decisions"></div>
+  </div>
+
+  <div class="col">
+    <h3>Escalation Chain</h3>
+    <div id="chain">
+      <div class="service"><span>L1: Alex Chen (On-call)</span><span style="color:#3fb950">Active</span></div>
+      <div class="service"><span>L2: Sarah Park (Team Lead)</span><span style="color:#8b949e">Standby</span></div>
+      <div class="service"><span>L3: VP Engineering</span><span style="color:#8b949e">Standby</span></div>
+    </div>
+    <h3>Recent Deployments</h3>
+    <div id="deploys">
+      <div class="service"><span>v2.4.1 — 23min ago</span><span style="color:#e3b341">⚠️</span></div>
+      <div class="service"><span>v2.4.0 — 2 days ago</span><span style="color:#3fb950">✓</span></div>
+      <div class="service"><span>v2.3.9 — 5 days ago</span><span style="color:#3fb950">✓</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let a2hCount=0;
+function time(){return new Date().toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});}
+
+function addTimeline(msg,cls='info'){
+  document.getElementById('timeline').innerHTML+=`<div class="timeline-item ${cls}"><span class="time">${time()}</span><div class="msg">${msg}</div></div>`;
+}
+
+function addDecision(from,question,options,ctx,priority='high'){
+  a2hCount++;
+  const id=`d-${a2hCount}`;
+  const btns=options.map(o=>`<button class="btn btn-${o.style||'ghost'}" onclick="resolve('${id}','${o.value}')">${o.label}</button>`).join('');
+  let ctxHtml='';for(const[k,v]of Object.entries(ctx)){ctxHtml+=`<div><strong>${k}:</strong> ${v}</div>`;}
+  document.getElementById('decisions').innerHTML+=`<div class="a2h-card" id="${id}">
+    <div class="from">🤖 ${from} → 👤 On-call Engineer</div>
+    <div class="q">${question}</div>
+    <div class="ctx">${ctxHtml}</div>
+    ${priority==='critical'?'<div class="timer">⚡ CRITICAL — Respond immediately</div>':''}
+    <div style="margin-top:6px">${btns}</div>
+  </div>`;
+  addTimeline(`A2H: ${from} asks "${question.substring(0,50)}..."`,priority==='critical'?'escalation':'info');
+}
+
+function resolve(id,action){
+  const el=document.getElementById(id);if(el){el.classList.add('resolved');el.querySelector('div:last-child').innerHTML=`<span style="color:#3fb950;font-weight:600">✓ ${action}</span>`;}
+  addTimeline(`Decision: ${action}`,'action');
+}
+
+function updateMetric(id,value,cls,change=''){
+  const el=document.getElementById(id);if(el)el.textContent=value;
+  const parent=el?.parentElement;if(parent){parent.className=`metric ${cls}`;const ch=parent.querySelector('.change');if(ch){ch.textContent=change;ch.style.color=cls==='danger'?'#f85149':cls==='warning'?'#e3b341':'#3fb950';}}
+}
+
+function updateService(name,status){
+  const services=document.getElementById('services');
+  const divs=services.querySelectorAll('.service');
+  divs.forEach(d=>{if(d.textContent.includes(name)){d.innerHTML=`<span><span class="dot dot-${status}"></span>${name}</span><span style="color:${status==='up'?'#3fb950':status==='degraded'?'#e3b341':'#f85149'}">${status.toUpperCase()}</span>`;}});
+}
+
+// === INCIDENT SIMULATION ===
+
+// T+0: Normal
+addTimeline('System nominal. All services operational.','info');
+
+// T+3s: First signs
+setTimeout(()=>{
+  updateMetric('m-err','1.2%','warning','↑ Rising');
+  updateMetric('m-lat','450ms','warning','↑ 3.7x baseline');
+  addTimeline('⚠️ Error rate rising: 0.2% → 1.2%','alert');
+  addTimeline('AI Monitor detected anomaly — correlating with recent deployments','info');
+},3000);
+
+// T+6s: Service degradation
+setTimeout(()=>{
+  updateMetric('m-err','5.8%','danger','🔴 5x baseline');
+  updateMetric('m-lat','2,100ms','danger','🔴 17x baseline');
+  updateMetric('m-users','1,247','danger');
+  updateService('Payment Service','degraded');
+  updateService('API Gateway','degraded');
+  document.getElementById('status').textContent='DEGRADED';
+  document.getElementById('status').style.color='#e3b341';
+  document.getElementById('alert-banner').style.display='block';
+  addTimeline('🚨 P1 INCIDENT DECLARED — Error rate 5x baseline','alert');
+  addTimeline('AI correlating: deployment v2.4.1 (23min ago) is probable cause','info');
+},6000);
+
+// T+8s: First A2H decision
+setTimeout(()=>{
+  addDecision('Incident Agent','Rollback deployment v2.4.1? Deployed 23min ago. Error rate 5x since deploy.',[
+    {label:'🔄 Rollback Now',value:'rollback',style:'danger'},
+    {label:'⏸ Investigate First',value:'investigate',style:'warn'},
+    {label:'📊 Monitor 5min',value:'monitor',style:'ghost'},
+  ],{deployment:'v2.4.1',deployed:'23 minutes ago',error_rate:'5.8% (baseline: 0.2%)',affected_users:'1,247',services:'Payment Service, API Gateway'},'critical');
+},8000);
+
+// T+12s: Escalation
+setTimeout(()=>{
+  updateMetric('m-err','12.3%','danger','🔴 Critical');
+  updateMetric('m-users','3,891','danger');
+  updateService('Payment Service','down');
+  document.getElementById('status').textContent='OUTAGE';
+  document.getElementById('status').style.color='#f85149';
+  addTimeline('Payment Service DOWN — complete outage','alert');
+
+  addDecision('Escalation Agent','Payment Service is DOWN. 3,891 users affected. Escalate to Team Lead?',[
+    {label:'⬆️ Page Team Lead',value:'page_lead',style:'danger'},
+    {label:'📢 Open War Room',value:'war_room',style:'warn'},
+  ],{service:'Payment Service',status:'DOWN',users_affected:'3,891',revenue_impact:'~$12K/min'},'critical');
+},12000);
+
+// T+16s: Status page
+setTimeout(()=>{
+  addDecision('Communications Agent','Post status page update? Suggested message: "We are investigating increased error rates affecting payments."',[
+    {label:'📝 Post Update',value:'post',style:'ok'},
+    {label:'✏️ Edit First',value:'edit',style:'ghost'},
+    {label:'⏸ Wait',value:'wait',style:'ghost'},
+  ],{channel:'status.company.com',affected:'Payment processing',eta:'Investigating'},'high');
+},16000);
+
+// T+20s: Recovery
+setTimeout(()=>{
+  updateMetric('m-err','0.8%','warning','↓ Recovering');
+  updateMetric('m-lat','280ms','warning','↓ Stabilizing');
+  updateService('Payment Service','degraded');
+  addTimeline('Rollback to v2.4.0 initiated — error rate dropping','action');
+},20000);
+
+// T+25s: Resolved
+setTimeout(()=>{
+  updateMetric('m-err','0.2%','ok','✓ Normal');
+  updateMetric('m-lat','115ms','ok','✓ Normal');
+  updateMetric('m-users','0','ok');
+  updateMetric('m-rps','2,400','ok','✓ Normal');
+  updateService('Payment Service','up');
+  updateService('API Gateway','up');
+  document.getElementById('status').textContent='OPERATIONAL';
+  document.getElementById('status').style.color='#3fb950';
+  document.getElementById('alert-banner').style.display='none';
+  addTimeline('✅ ALL SERVICES RESTORED — Incident resolved','action');
+
+  addDecision('Post-Mortem Agent','Incident resolved. Generate post-mortem report?',[
+    {label:'📄 Generate Report',value:'generate',style:'ok'},
+    {label:'📅 Schedule Review',value:'schedule',style:'ghost'},
+  ],{duration:'~22 minutes',root_cause:'v2.4.1 payment handler regression',impact:'3,891 users, ~$264K revenue at risk',resolution:'Rollback to v2.4.0'},'medium');
+},25000);
+</script>
+</body>
+</html>

@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A2H Demo — Compliance Audit</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}body{background:#0d1117;color:#c9d1d9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px}
+.header{display:flex;justify-content:space-between;align-items:center;padding:10px 20px;border-bottom:1px solid #21262d}.header h1{font-size:18px;color:#f0f6fc}.header h1 span{color:#8b949e;font-weight:400;font-size:13px}
+.stats{display:flex;gap:16px}.stat{text-align:center}.stat .n{font-size:20px;font-weight:800}.stat .l{font-size:9px;color:#484f58;text-transform:uppercase;letter-spacing:1px}
+.main{display:grid;grid-template-columns:250px 1fr 280px;height:calc(100vh - 48px)}
+.panel{padding:10px;overflow-y:auto;border-right:1px solid #21262d}.panel:last-child{border:none;background:#161b22}
+.panel h3{font-size:10px;color:#484f58;text-transform:uppercase;letter-spacing:1px;margin:10px 0 6px}
+
+.framework{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:8px;margin:4px 0;font-size:11px;cursor:pointer;transition:border-color 0.15s}
+.framework:hover{border-color:#58a6ff}
+.framework .fname{font-weight:700;color:#f0f6fc;font-size:12px}.framework .fscore{float:right;font-weight:800}
+.progress-bar{height:6px;background:#30363d;border-radius:3px;margin:4px 0;overflow:hidden}
+.progress-fill{height:100%;border-radius:3px}
+
+.finding{background:#161b22;border:1px solid #30363d;border-radius:10px;margin:6px 0;overflow:hidden;animation:fadeIn 0.3s}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.finding.remediated{border-color:#238636;opacity:0.5}.finding.accepted{border-color:#e3b341;opacity:0.6}
+.find-header{padding:8px 12px;border-bottom:1px solid #21262d;display:flex;justify-content:space-between;align-items:center}
+.find-header .fid{color:#8b949e;font-size:10px}.find-header .severity{padding:2px 8px;border-radius:3px;font-size:9px;font-weight:600}
+.sev-critical{background:#3a1a1a;color:#f85149}.sev-high{background:#2a1f17;color:#f0883e}.sev-medium{background:#2a2517;color:#e3b341}.sev-low{background:#1c2230;color:#8b949e}
+
+.find-body{padding:10px 12px}
+.find-title{font-weight:700;color:#f0f6fc;font-size:12px;margin-bottom:4px}
+.regulation{background:#0d1117;border-left:3px solid #58a6ff;border-radius:0 6px 6px 0;padding:6px 8px;margin:4px 0;font-size:10px}
+.regulation .ref{color:#58a6ff;font-weight:600}
+.current-state{background:#3a1a1a;border-radius:6px;padding:6px 8px;margin:4px 0;font-size:10px;color:#ff7b72}
+.proposed-fix{background:#1f2a22;border:1px solid #3fb950;border-radius:6px;padding:6px 8px;margin:4px 0;font-size:10px;color:#3fb950}
+.impact{background:#21262d;border-radius:6px;padding:6px 8px;margin:4px 0;font-size:10px;color:#8b949e}
+
+.a2h-box{background:#2a1f33;border:1px solid #8957e5;border-radius:6px;padding:6px 8px;margin:4px 0;font-size:10px;color:#bc8cff}
+.auto-box{background:#2a2517;border:1px solid #d29922;border-radius:6px;padding:6px 8px;margin:4px 0;font-size:10px;color:#e3b341}
+.actions{padding:8px 12px;border-top:1px solid #21262d;display:flex;gap:4px;flex-wrap:wrap}
+.btn{padding:4px 12px;border-radius:5px;border:none;font-size:10px;font-weight:600;cursor:pointer}.btn:hover{opacity:0.85}
+.btn-fix{background:#238636;color:#fff}.btn-accept{background:#d29922;color:#fff}.btn-escalate{background:#8957e5;color:#fff}.btn-defer{background:#21262d;color:#c9d1d9;border:1px solid #30363d}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Compliance Audit <span>— Continuous Regulatory Monitoring</span></h1>
+  <div class="stats">
+    <div class="stat"><div class="n" id="s1" style="color:#58a6ff">0</div><div class="l">Controls</div></div>
+    <div class="stat"><div class="n" id="s2" style="color:#3fb950">0</div><div class="l">Compliant</div></div>
+    <div class="stat"><div class="n" id="s3" style="color:#f85149">0</div><div class="l">Gaps</div></div>
+    <div class="stat"><div class="n" id="s4" style="color:#e3b341">0</div><div class="l">Remediated</div></div>
+  </div>
+</div>
+<div class="main">
+  <div class="panel">
+    <h3>Frameworks</h3>
+    <div id="frameworks"></div>
+  </div>
+  <div class="panel" style="border-right:none">
+    <h3>Findings</h3>
+    <div id="findings"></div>
+  </div>
+  <div class="panel">
+    <h3>Compliance Team</h3>
+    <div id="team"></div>
+    <h3>Auto-Close Rules</h3>
+    <div style="background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:8px;font-size:10px;color:#8b949e">
+      <strong style="color:#3fb950">Auto-close:</strong> Finding already remediated in current scan<br><br>
+      <strong style="color:#e3b341">Compliance Officer:</strong> New gaps, policy changes<br><br>
+      <strong style="color:#f85149">CISO escalation:</strong> Critical gaps, data breach risk, regulatory deadline
+    </div>
+    <h3>Upcoming Deadlines</h3>
+    <div id="deadlines"></div>
+  </div>
+</div>
+<script>
+let controls=0,compliant=0,gaps=0,remediated=0;let fId=0;
+
+const frameworks=[
+  {name:'SOC 2 Type II',score:94,total:85,passing:80},
+  {name:'GDPR',score:88,total:42,passing:37},
+  {name:'HIPAA',score:91,total:36,passing:33},
+  {name:'PCI DSS',score:96,total:28,passing:27},
+];
+
+const findings=[
+  {framework:'GDPR',severity:'critical',title:'Data Retention Exceeds Policy',
+   regulation:'GDPR Article 17 — Right to Erasure',
+   regText:'Personal data shall be erased without undue delay when it is no longer necessary for the purpose for which it was collected.',
+   current:'User analytics data retained for 36 months. Policy states "necessary period" — industry standard is 12-24 months.',
+   fix:'Update retention policy to 18 months. Purge data older than 18 months from analytics pipeline.',
+   impact:'Affects 3 data pipelines (analytics, reporting, ML training). ~2.1M records to purge.',
+   escalate:true,reviewer:'CISO'},
+  {framework:'SOC 2',severity:'high',title:'Access Reviews Overdue',
+   regulation:'SOC 2 CC6.1 — Logical Access Controls',
+   regText:'The entity implements logical access security measures to protect against unauthorized access to information assets.',
+   current:'Quarterly access reviews for production systems overdue by 23 days. Last review: 4 months ago.',
+   fix:'Complete access review within 7 days. Remove 12 stale accounts identified by pre-scan.',
+   impact:'12 stale accounts with production access. 3 belong to former employees.',
+   escalate:false,reviewer:'Compliance Officer'},
+  {framework:'HIPAA',severity:'medium',title:'Encryption Gap in Transit',
+   regulation:'HIPAA §164.312(e)(1) — Transmission Security',
+   regText:'Implement technical security measures to guard against unauthorized access to ePHI transmitted over electronic communications.',
+   current:'Internal microservice communication between patient-service and billing-service uses HTTP (not HTTPS).',
+   fix:'Enable mTLS between microservices. Certificate rotation via Vault.',
+   impact:'Internal network only — low external risk. Affects 2 services.',
+   escalate:false,reviewer:'Compliance Officer'},
+  {framework:'PCI DSS',severity:'low',title:'Logging Retention Short',
+   regulation:'PCI DSS Req 10.7 — Log Retention',
+   regText:'Retain audit trail history for at least one year, with a minimum of three months immediately available for analysis.',
+   current:'Centralized logs retained for 10 months. Requirement is 12 months.',
+   fix:'Increase log retention from 10 to 12 months in ELK configuration.',
+   impact:'Configuration change only. Storage increase: ~200GB.',
+   auto:true},
+  {framework:'GDPR',severity:'high',title:'Cookie Consent Non-Compliant',
+   regulation:'GDPR Article 7 — Conditions for Consent',
+   regText:'The controller shall be able to demonstrate that the data subject has consented to processing of personal data.',
+   current:'Cookie banner uses pre-checked boxes for analytics cookies. GDPR requires opt-in, not opt-out.',
+   fix:'Update cookie banner: uncheck all non-essential cookies by default. Add granular category controls.',
+   impact:'May reduce analytics tracking by 30-40%. Marketing team needs notification.',
+   escalate:false,reviewer:'Compliance Officer'},
+  {framework:'SOC 2',severity:'low',title:'Password Policy Update',
+   regulation:'SOC 2 CC6.1 — Authentication',
+   regText:'Entity uses authentication mechanisms to validate user identity.',
+   current:'Minimum password length is 8 characters. NIST SP 800-63B recommends 12+.',
+   fix:'Update password policy to 12 character minimum. Existing users prompted at next login.',
+   impact:'~500 users will need to update passwords. No service disruption.',
+   auto:true},
+];
+
+function scoreColor(s){return s>=95?'#3fb950':s>=85?'#e3b341':'#f85149';}
+function renderFrameworks(){
+  document.getElementById('frameworks').innerHTML=frameworks.map(f=>{
+    controls+=f.total;compliant+=f.passing;gaps+=f.total-f.passing;
+    return `<div class="framework"><div class="fname">${f.name}<span class="fscore" style="color:${scoreColor(f.score)}">${f.score}%</span></div>
+    <div style="font-size:10px;color:#8b949e">${f.passing}/${f.total} controls passing</div>
+    <div class="progress-bar"><div class="progress-fill" style="width:${f.score}%;background:${scoreColor(f.score)}"></div></div></div>`;
+  }).join('');
+  document.getElementById('s1').textContent=controls;
+  document.getElementById('s2').textContent=compliant;
+  document.getElementById('s3').textContent=gaps;
+}
+
+function addFinding(f){
+  fId++;const id=`f-${fId}`;
+  let a2hHtml='';
+  if(f.auto){
+    a2hHtml=`<div class="auto-box">🤖 Auto-closed: low-risk finding with clear remediation. Applied automatically.</div>`;
+    remediated++;document.getElementById('s4').textContent=remediated;
+  } else if(f.escalate){
+    a2hHtml=`<div class="a2h-box">🔒 A2H Escalated → <strong>${f.reviewer}</strong><br><small>Critical compliance gap — requires senior review and regulatory response plan</small></div>`;
+  } else {
+    a2hHtml=`<div class="a2h-box">📋 A2H → <strong>${f.reviewer}</strong><br><small>Non-critical gap needs remediation plan approval</small></div>`;
+  }
+
+  let actionsHtml='';
+  if(!f.auto){
+    actionsHtml=`<div class="actions" id="act-${id}">
+      <button class="btn btn-fix" onclick="resolve('${id}','remediated')">🔧 Remediate</button>
+      <button class="btn btn-accept" onclick="resolve('${id}','risk accepted')">⚠️ Accept Risk</button>
+      ${f.escalate?`<button class="btn btn-escalate" onclick="resolve('${id}','escalated to board')">⬆️ Escalate to Board</button>`:''}
+      <button class="btn btn-defer" onclick="resolve('${id}','deferred')">📅 Defer</button>
+    </div>`;
+  }
+
+  document.getElementById('findings').innerHTML+=`<div class="finding ${f.auto?'remediated':''}" id="${id}">
+    <div class="find-header"><span class="fid">${f.framework} · F-${String(fId).padStart(3,'0')}</span><span class="severity sev-${f.severity}">${f.severity}</span></div>
+    <div class="find-body">
+      <div class="find-title">${f.title}</div>
+      <div class="regulation"><span class="ref">${f.regulation}</span><br>${f.regText}</div>
+      <div class="current-state">Current: ${f.current}</div>
+      <div class="proposed-fix">Proposed: ${f.fix}</div>
+      <div class="impact">Impact: ${f.impact}</div>
+      ${a2hHtml}
+    </div>
+    ${actionsHtml}
+  </div>`;
+}
+
+function resolve(id,action){
+  const el=document.getElementById(id);if(!el)return;
+  el.classList.add(action==='remediated'?'remediated':'accepted');
+  const act=document.getElementById(`act-${id}`);
+  if(act)act.innerHTML=`<span style="color:${action==='remediated'?'#3fb950':'#e3b341'};font-size:10px;font-weight:600">✓ ${action}</span>`;
+  if(action==='remediated'){remediated++;document.getElementById('s4').textContent=remediated;}
+}
+
+function renderTeam(){
+  document.getElementById('team').innerHTML=[
+    {name:'Maria Santos',role:'Compliance Officer'},{name:'David Park',role:'CISO'},{name:'🤖 Audit Agent',role:'Continuous monitoring'},
+  ].map(t=>`<div style="background:#21262d;border:1px solid #30363d;border-radius:6px;padding:6px 8px;margin:3px 0;font-size:11px"><div style="font-weight:700;color:#f0f6fc">${t.name}</div><div style="color:#8b949e;font-size:10px">${t.role}</div></div>`).join('');
+}
+
+function renderDeadlines(){
+  document.getElementById('deadlines').innerHTML=[
+    {name:'SOC 2 audit',date:'Aug 15, 2026',days:112,color:'#3fb950'},
+    {name:'GDPR DPA renewal',date:'Jul 1, 2026',days:67,color:'#e3b341'},
+    {name:'PCI DSS assessment',date:'Jun 15, 2026',days:51,color:'#e3b341'},
+    {name:'HIPAA risk assessment',date:'May 30, 2026',days:35,color:'#f85149'},
+  ].map(d=>`<div style="background:#21262d;border-radius:6px;padding:6px 8px;margin:3px 0;font-size:10px;display:flex;justify-content:space-between"><span>${d.name}</span><span style="color:${d.color}">${d.days} days</span></div>`).join('');
+}
+
+renderFrameworks();renderTeam();renderDeadlines();
+findings.forEach((f,i)=>setTimeout(()=>addFinding(f),i*2500));
+</script>
+</body>
+</html>

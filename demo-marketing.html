@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A2H Demo — Marketing Campaign Approval</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}body{background:#0d1117;color:#c9d1d9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px}
+.header{display:flex;justify-content:space-between;align-items:center;padding:10px 20px;border-bottom:1px solid #21262d}.header h1{font-size:18px;color:#f0f6fc}.header h1 span{color:#8b949e;font-weight:400;font-size:13px}
+.main{display:grid;grid-template-columns:1fr 300px;height:calc(100vh - 48px)}
+.feed{padding:12px;overflow-y:auto}.right{background:#161b22;border-left:1px solid #21262d;padding:10px;overflow-y:auto}
+.right h3{font-size:10px;color:#484f58;text-transform:uppercase;letter-spacing:1px;margin:10px 0 6px}
+
+.campaign{background:#161b22;border:1px solid #30363d;border-radius:12px;margin:8px 0;overflow:hidden;animation:fadeIn 0.3s}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.campaign.approved{border-color:#238636;opacity:0.6}.campaign.rejected{border-color:#da3633;opacity:0.5}
+.camp-header{padding:10px 14px;background:#0d1117;display:flex;justify-content:space-between;align-items:center}
+.camp-header .cname{font-weight:700;color:#f0f6fc;font-size:14px}.camp-header .ctype{padding:2px 8px;border-radius:3px;font-size:9px;font-weight:600}
+.type-launch{background:#1f2a22;color:#3fb950}.type-test{background:#2a2517;color:#e3b341}.type-retarget{background:#1c2941;color:#58a6ff}
+
+.camp-body{padding:12px 14px}
+.camp-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:6px 0}
+.cm{background:#0d1117;border-radius:6px;padding:6px;text-align:center}
+.cm .cmv{font-size:16px;font-weight:800}.cm .cml{font-size:8px;color:#484f58;text-transform:uppercase}
+
+.preview{background:#21262d;border-radius:8px;padding:10px;margin:6px 0}
+.preview .plabel{font-size:9px;color:#484f58;text-transform:uppercase;margin-bottom:4px}
+.preview .ad-text{font-size:12px;color:#f0f6fc;line-height:1.5;padding:6px;background:#0d1117;border-radius:4px;border-left:3px solid #58a6ff}
+.preview .ad-cta{display:inline-block;background:#1f6feb;color:#fff;padding:4px 12px;border-radius:4px;font-size:10px;font-weight:600;margin-top:6px}
+
+.ab-test{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:6px 0}
+.ab-variant{background:#0d1117;border-radius:6px;padding:8px;font-size:10px;border:1px solid #30363d}
+.ab-variant .vname{font-weight:600;color:#f0f6fc;margin-bottom:3px}
+
+.a2h-box{background:#2a1f33;border:1px solid #8957e5;border-radius:6px;padding:6px 8px;margin:6px 0;font-size:10px;color:#bc8cff}
+.auto-box{background:#2a2517;border:1px solid #d29922;border-radius:6px;padding:6px 8px;margin:6px 0;font-size:10px;color:#e3b341}
+.actions{padding:8px 14px;border-top:1px solid #21262d;display:flex;gap:4px;flex-wrap:wrap}
+.btn{padding:5px 12px;border-radius:5px;border:none;font-size:10px;font-weight:600;cursor:pointer}.btn:hover{opacity:0.85}
+.btn-launch{background:#238636;color:#fff}.btn-edit{background:#1f6feb;color:#fff}.btn-reject{background:#da3633;color:#fff}.btn-ghost{background:#21262d;color:#c9d1d9;border:1px solid #30363d}
+</style>
+</head>
+<body>
+<div class="header"><h1>Marketing Campaigns <span>— AI Creative + Budget Approval</span></h1></div>
+<div class="main">
+  <div class="feed" id="feed"></div>
+  <div class="right">
+    <h3>Approval Rules</h3>
+    <div style="background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:8px;font-size:10px;color:#8b949e">
+      <strong style="color:#3fb950">Auto-approve:</strong> A/B tests under $500<br><br>
+      <strong style="color:#e3b341">Marketing Director:</strong> Campaigns $500-$25K<br><br>
+      <strong style="color:#f85149">CMO + Finance:</strong> Campaigns over $25K
+    </div>
+    <h3>Q3 Budget</h3>
+    <div style="background:#21262d;border-radius:8px;padding:10px;margin:4px 0">
+      <div style="display:flex;justify-content:space-between;font-size:11px"><span>Spent</span><span style="color:#e3b341">$142K / $200K</span></div>
+      <div style="height:8px;background:#30363d;border-radius:4px;margin:4px 0;overflow:hidden"><div style="width:71%;height:100%;background:#e3b341;border-radius:4px"></div></div>
+      <div style="font-size:9px;color:#484f58">$58K remaining · 6 weeks left in Q3</div>
+    </div>
+    <h3>Team</h3>
+    <div id="team"></div>
+  </div>
+</div>
+<script>
+const campaigns=[
+  {name:'Summer Sale 2026',type:'launch',budget:50000,audience:'2.4M',roi:3.2,duration:'14 days',
+   ad:'Transform your workspace this summer. Premium tools at 40% off — limited time only.',cta:'Shop Now',
+   ab:[{name:'Variant A',headline:'Summer Sale — 40% Off',ctr:'2.8%'},{name:'Variant B',headline:'Your Best Work Starts Here',ctr:'3.1%'}],
+   approver:'CMO + Finance',auto:false,big:true},
+  {name:'Retargeting — Cart Abandoners',type:'retarget',budget:3500,audience:'45K',roi:5.1,duration:'30 days',
+   ad:'Forgot something? Your cart is waiting. Complete your order today and get free shipping.',cta:'Complete Order',
+   approver:'Marketing Director',auto:false},
+  {name:'A/B Test — CTA Colors',type:'test',budget:200,audience:'10K',roi:null,duration:'7 days',
+   ad:'Testing button color variants: blue vs green vs orange on landing page.',cta:'Learn More',
+   approver:null,auto:true},
+  {name:'Enterprise Webinar Promotion',type:'launch',budget:8000,audience:'120K',roi:2.8,duration:'21 days',
+   ad:'Join industry leaders for our AI in Enterprise webinar. Free registration, limited seats.',cta:'Register Free',
+   approver:'Marketing Director',auto:false},
+  {name:'A/B Test — Subject Lines',type:'test',budget:150,audience:'5K',roi:null,duration:'3 days',
+   ad:'Testing email subject line variants for newsletter open rates.',cta:'Read More',
+   approver:null,auto:true},
+];
+
+let campId=0;
+function addCampaign(c){
+  campId++;const id=`camp-${campId}`;
+  const typeClass={launch:'type-launch',test:'type-test',retarget:'type-retarget'}[c.type];
+
+  let a2hHtml='';
+  if(c.auto){a2hHtml=`<div class="auto-box">🤖 Auto-approved: A/B test budget $${c.budget} under $500 threshold</div>`;}
+  else if(c.big){a2hHtml=`<div class="a2h-box">🔒 A2H → <strong>${c.approver}</strong><br><small>Budget $${c.budget.toLocaleString()} exceeds $25K — requires CMO and Finance sign-off</small></div>`;}
+  else{a2hHtml=`<div class="a2h-box">📋 A2H → <strong>${c.approver}</strong><br><small>Budget $${c.budget.toLocaleString()} requires marketing director approval</small></div>`;}
+
+  let abHtml='';
+  if(c.ab){abHtml=`<div class="ab-test">${c.ab.map(v=>`<div class="ab-variant"><div class="vname">${v.name}</div>"${v.headline}"<br><span style="color:#3fb950">Predicted CTR: ${v.ctr}</span></div>`).join('')}</div>`;}
+
+  let actionsHtml='';
+  if(!c.auto){actionsHtml=`<div class="actions" id="act-${id}">
+    <button class="btn btn-launch" onclick="resolve('${id}','launched')">🚀 Launch</button>
+    <button class="btn btn-edit" onclick="resolve('${id}','edited')">✏️ Edit Creative</button>
+    <button class="btn btn-ghost" onclick="resolve('${id}','adjusted')">💰 Adjust Budget</button>
+    <button class="btn btn-reject" onclick="resolve('${id}','rejected')">❌ Reject</button>
+  </div>`;}
+
+  document.getElementById('feed').innerHTML+=`<div class="campaign ${c.auto?'approved':''}" id="${id}">
+    <div class="camp-header"><span class="cname">${c.name}</span><span class="ctype ${typeClass}">${c.type}</span></div>
+    <div class="camp-body">
+      <div class="camp-metrics">
+        <div class="cm"><div class="cmv" style="color:#e3b341">$${(c.budget/1000).toFixed(c.budget>=1000?0:1)}K</div><div class="cml">Budget</div></div>
+        <div class="cm"><div class="cmv" style="color:#58a6ff">${c.audience}</div><div class="cml">Audience</div></div>
+        <div class="cm"><div class="cmv" style="color:#3fb950">${c.roi?c.roi+'x':'TBD'}</div><div class="cml">Proj. ROI</div></div>
+        <div class="cm"><div class="cmv" style="color:#c9d1d9">${c.duration}</div><div class="cml">Duration</div></div>
+      </div>
+      <div class="preview"><div class="plabel">Ad Preview</div><div class="ad-text">${c.ad}</div><div class="ad-cta">${c.cta}</div></div>
+      ${abHtml}${a2hHtml}
+    </div>
+    ${actionsHtml}
+  </div>`;
+}
+
+function resolve(id,action){
+  const el=document.getElementById(id);if(!el)return;
+  el.classList.add(action==='rejected'?'rejected':'approved');
+  const act=document.getElementById(`act-${id}`);
+  if(act)act.innerHTML=`<span style="color:${action==='rejected'?'#f85149':'#3fb950'};font-size:11px;font-weight:600">✓ ${action}</span>`;
+}
+
+document.getElementById('team').innerHTML=[
+  {name:'Emma Wilson',role:'Marketing Director'},{name:'James Park',role:'CMO'},{name:'AI Creative Agent',role:'🤖 Generates copy + A/B variants'},
+].map(t=>`<div style="background:#21262d;border:1px solid #30363d;border-radius:6px;padding:6px 8px;margin:3px 0;font-size:11px"><div style="font-weight:700;color:#f0f6fc">${t.name}</div><div style="color:#8b949e;font-size:10px">${t.role}</div></div>`).join('');
+campaigns.forEach((c,i)=>setTimeout(()=>addCampaign(c),i*2000));
+</script>
+</body>
+</html>

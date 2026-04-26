@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A2H Demo — Legal Contract Review</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}body{background:#0d1117;color:#c9d1d9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px}
+.header{display:flex;justify-content:space-between;align-items:center;padding:10px 20px;border-bottom:1px solid #21262d}.header h1{font-size:18px;color:#f0f6fc}.header h1 span{color:#8b949e;font-weight:400;font-size:13px}
+.stats{display:flex;gap:16px}.stat{text-align:center}.stat .n{font-size:20px;font-weight:800}.stat .l{font-size:9px;color:#484f58;text-transform:uppercase;letter-spacing:1px}
+.main{display:grid;grid-template-columns:280px 1fr 280px;height:calc(100vh - 48px)}
+.panel{padding:10px;overflow-y:auto;border-right:1px solid #21262d}.panel:last-child{border:none;background:#161b22}
+.panel h3{font-size:10px;color:#484f58;text-transform:uppercase;letter-spacing:1px;margin:10px 0 6px}
+.contract{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:8px 10px;margin:4px 0;cursor:pointer;transition:border-color 0.15s;font-size:11px}
+.contract:hover,.contract.active{border-color:#58a6ff}
+.contract .title{font-weight:700;color:#f0f6fc;font-size:12px}.contract .meta{color:#8b949e;font-size:10px;margin-top:2px}
+.contract .risk{display:inline-block;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:600;margin-top:3px}
+.risk-high{background:#3a1a1a;color:#f85149}.risk-medium{background:#2a2517;color:#e3b341}.risk-low{background:#1a3a2a;color:#3fb950}.risk-standard{background:#1c2941;color:#58a6ff}
+.clause{background:#161b22;border:1px solid #30363d;border-radius:10px;margin:6px 0;overflow:hidden;animation:fadeIn 0.3s}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.clause-header{padding:8px 12px;border-bottom:1px solid #21262d;display:flex;justify-content:space-between;align-items:center}
+.clause-header .name{font-weight:600;color:#f0f6fc;font-size:12px}.clause-header .section{color:#8b949e;font-size:10px}
+.clause-body{padding:10px 12px}
+.clause-text{background:#0d1117;border-radius:6px;padding:8px;font-size:11px;line-height:1.6;color:#c9d1d9;border-left:3px solid #30363d;margin:4px 0}
+.clause-text.flagged{border-left-color:#f85149}.clause-text.modified{border-left-color:#e3b341}.clause-text.standard{border-left-color:#3fb950}
+.comparison{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:6px 0}
+.comp-box{background:#0d1117;border-radius:6px;padding:6px 8px;font-size:10px}
+.comp-box .label{color:#484f58;font-size:9px;text-transform:uppercase;margin-bottom:2px}
+.comp-box.theirs{border:1px solid #f85149}.comp-box.ours{border:1px solid #3fb950}
+.risk-analysis{background:#21262d;border-radius:6px;padding:8px;margin:4px 0;font-size:10px}
+.risk-analysis .risk-label{font-weight:600;margin-bottom:3px}
+.past-decisions{font-size:9px;color:#484f58;margin:4px 0;padding:4px 6px;background:#0d1117;border-radius:4px}
+.a2h-box{background:#2a1f33;border:1px solid #8957e5;border-radius:6px;padding:6px 8px;margin:4px 0;font-size:10px;color:#bc8cff}
+.auto-box{background:#2a2517;border:1px solid #d29922;border-radius:6px;padding:6px 8px;margin:4px 0;font-size:10px;color:#e3b341}
+.actions{padding:8px 12px;border-top:1px solid #21262d;display:flex;gap:4px;flex-wrap:wrap}
+.btn{padding:4px 12px;border-radius:5px;border:none;font-size:10px;font-weight:600;cursor:pointer}.btn:hover{opacity:0.85}
+.btn-accept{background:#238636;color:#fff}.btn-reject{background:#da3633;color:#fff}.btn-negotiate{background:#1f6feb;color:#fff}.btn-escalate{background:#8957e5;color:#fff}.btn-ghost{background:#21262d;color:#c9d1d9;border:1px solid #30363d}
+.resolved{opacity:0.4}.resolved .actions{display:none}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Contract Review <span>— AI Clause Analysis + Legal Escalation</span></h1>
+  <div class="stats">
+    <div class="stat"><div class="n" id="s1" style="color:#58a6ff">0</div><div class="l">Contracts</div></div>
+    <div class="stat"><div class="n" id="s2" style="color:#3fb950">0</div><div class="l">Auto-OK</div></div>
+    <div class="stat"><div class="n" id="s3" style="color:#e3b341">0</div><div class="l">Needs Review</div></div>
+    <div class="stat"><div class="n" id="s4" style="color:#f85149">0</div><div class="l">High Risk</div></div>
+  </div>
+</div>
+<div class="main">
+  <div class="panel">
+    <h3>Contracts</h3>
+    <div id="contracts"></div>
+  </div>
+  <div class="panel" style="border-right:none">
+    <h3>Clause Analysis</h3>
+    <div id="clauses"></div>
+  </div>
+  <div class="panel">
+    <h3>Legal Team</h3>
+    <div id="team"></div>
+    <h3>Review Policy</h3>
+    <div style="background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:8px;font-size:10px;color:#8b949e">
+      <strong style="color:#f0f6fc">Auto-approve:</strong> Standard clauses matching template<br><br>
+      <strong style="color:#e3b341">Human review:</strong> Non-standard terms, modified liability<br><br>
+      <strong style="color:#f85149">Legal escalation:</strong> IP assignment, unlimited liability, non-compete >2yr
+    </div>
+  </div>
+</div>
+<script>
+let cCount=0,autoOk=0,needsReview=0,highRisk=0;
+const team=[
+  {name:'Jennifer Walsh',role:'General Counsel',reviews:0},
+  {name:'Marcus Chen',role:'Corporate Attorney',reviews:0},
+  {name:'Lisa Park',role:'Contract Manager',reviews:0},
+];
+
+const contracts=[
+  {title:'Acme Corp — SaaS Agreement',party:'Acme Corporation',value:'$240K/yr',type:'SaaS Subscription',clauses:[
+    {name:'Payment Terms',section:'§4.1',text:'Net-30 payment terms. Invoices due within 30 days of receipt.',risk:'standard',auto:true},
+    {name:'Liability Cap',section:'§8.2',text:'Total liability limited to 12 months of fees paid.',risk:'standard',auto:true},
+    {name:'Data Processing',section:'§9.1',text:'Processor shall process data only as instructed by Controller, in accordance with GDPR Article 28.',risk:'standard',auto:true},
+  ]},
+  {title:'TechStart Inc — Enterprise License',party:'TechStart Inc',value:'$1.2M/yr',type:'Enterprise License',clauses:[
+    {name:'Liability Cap',section:'§7.3',text:'Vendor\'s total liability shall not exceed the GREATER of fees paid or $5,000,000.',risk:'medium',
+     theirs:'Greater of fees paid or $5M',ours:'Limited to 12 months fees ($1.2M)',auto:false,reviewer:'Corporate Attorney'},
+    {name:'IP Assignment',section:'§11.2',text:'All customizations, integrations, and derivative works created during the engagement shall be owned exclusively by Client.',risk:'high',
+     theirs:'Client owns all derivatives',ours:'We retain IP for pre-existing work',auto:false,reviewer:'General Counsel',escalate:true},
+    {name:'Termination',section:'§13.1',text:'Either party may terminate with 90 days written notice.',risk:'standard',auto:true},
+    {name:'SLA',section:'§5.4',text:'99.9% uptime guarantee with credits for downtime exceeding 0.1%.',risk:'low',auto:true},
+  ]},
+  {title:'GlobalCo — Reseller Agreement',party:'GlobalCo International',value:'$500K/yr',type:'Reseller',clauses:[
+    {name:'Non-Compete',section:'§14.1',text:'Vendor agrees not to sell directly to Reseller\'s customers for a period of 36 months following termination.',risk:'high',
+     theirs:'36-month non-compete post-termination',ours:'Maximum 12 months per company policy',auto:false,reviewer:'General Counsel',escalate:true},
+    {name:'Revenue Share',section:'§6.2',text:'Reseller receives 30% commission on all referred sales.',risk:'medium',
+     theirs:'30% commission',ours:'Standard is 20-25%',auto:false,reviewer:'Corporate Attorney'},
+    {name:'Indemnification',section:'§9.3',text:'Vendor shall indemnify Reseller against all claims arising from the use of the Product, including consequential damages, without limitation.',risk:'high',
+     theirs:'Unlimited indemnification including consequential',ours:'Capped at fees, excluding consequential',auto:false,reviewer:'General Counsel',escalate:true},
+  ]},
+];
+
+function renderTeam(){document.getElementById('team').innerHTML=team.map(t=>`<div style="background:#21262d;border:1px solid #30363d;border-radius:6px;padding:6px 8px;margin:3px 0;font-size:11px"><div style="font-weight:700;color:#f0f6fc">${t.name}</div><div style="color:#8b949e;font-size:10px">${t.role} · ${t.reviews} reviewed</div></div>`).join('');}
+function updateStats(){document.getElementById('s1').textContent=cCount;document.getElementById('s2').textContent=autoOk;document.getElementById('s3').textContent=needsReview;document.getElementById('s4').textContent=highRisk;}
+
+function loadContract(idx){
+  const c=contracts[idx];cCount++;
+  document.querySelectorAll('.contract').forEach(el=>el.classList.remove('active'));
+
+  document.getElementById('contracts').innerHTML+=`<div class="contract active" id="con-${idx}" onclick="showClauses(${idx})">
+    <div class="title">${c.title}</div>
+    <div class="meta">${c.party} · ${c.value} · ${c.type}</div>
+    <span class="risk risk-${c.clauses.some(cl=>cl.risk==='high')?'high':c.clauses.some(cl=>cl.risk==='medium')?'medium':'low'}">${c.clauses.filter(cl=>!cl.auto).length} clauses need review</span>
+  </div>`;
+
+  showClauses(idx);
+  updateStats();
+}
+
+function showClauses(idx){
+  const c=contracts[idx];
+  const el=document.getElementById('clauses');el.innerHTML='';
+  document.querySelectorAll('.contract').forEach(e=>e.classList.remove('active'));
+  const con=document.getElementById(`con-${idx}`);if(con)con.classList.add('active');
+
+  c.clauses.forEach((cl,ci)=>{
+    const clId=`cl-${idx}-${ci}`;
+    if(cl.auto)autoOk++;
+    else{needsReview++;if(cl.risk==='high')highRisk++;}
+    updateStats();
+
+    let compHtml='';
+    if(cl.theirs){
+      compHtml=`<div class="comparison">
+        <div class="comp-box theirs"><div class="label">Their Terms</div>${cl.theirs}</div>
+        <div class="comp-box ours"><div class="label">Our Standard</div>${cl.ours}</div>
+      </div>`;
+    }
+
+    let a2hHtml='';
+    if(cl.auto){
+      a2hHtml=`<div class="auto-box">🤖 Auto-approved: matches company template</div>`;
+    } else if(cl.escalate){
+      a2hHtml=`<div class="a2h-box">🔒 A2H Escalated → <strong>${cl.reviewer}</strong><br><small>${cl.risk==='high'?'High-risk clause requires senior legal review':'Non-standard terms need attorney review'}</small></div>`;
+    } else {
+      a2hHtml=`<div class="a2h-box">📋 A2H → <strong>${cl.reviewer}</strong> for review</div>`;
+    }
+
+    const pastHtml=cl.risk!=='standard'?`<div class="past-decisions">📊 Similar clause accepted in 3/5 recent contracts. Last: rejected in GlobalCo Q3 deal.</div>`:'';
+
+    let actionsHtml='';
+    if(!cl.auto){
+      actionsHtml=`<div class="actions" id="act-${clId}">
+        <button class="btn btn-accept" onclick="resolveClause('${clId}','accept')">✅ Accept</button>
+        <button class="btn btn-negotiate" onclick="resolveClause('${clId}','negotiate')">📝 Counter-propose</button>
+        <button class="btn btn-reject" onclick="resolveClause('${clId}','reject')">❌ Reject Clause</button>
+        ${cl.escalate?`<button class="btn btn-escalate" onclick="resolveClause('${clId}','escalate')">⬆️ Escalate to GC</button>`:''}
+      </div>`;
+    }
+
+    el.innerHTML+=`<div class="clause" id="${clId}">
+      <div class="clause-header"><span class="name">${cl.name}</span><div><span class="section">${cl.section}</span> <span class="risk risk-${cl.risk}">${cl.risk}</span></div></div>
+      <div class="clause-body">
+        <div class="clause-text ${cl.risk==='high'?'flagged':cl.risk==='medium'?'modified':'standard'}">${cl.text}</div>
+        ${compHtml}
+        <div class="risk-analysis"><div class="risk-label" style="color:${cl.risk==='high'?'#f85149':cl.risk==='medium'?'#e3b341':'#3fb950'}">Risk: ${cl.risk.toUpperCase()}</div></div>
+        ${pastHtml}${a2hHtml}
+      </div>
+      ${actionsHtml}
+    </div>`;
+  });
+}
+
+function resolveClause(id,action){
+  const el=document.getElementById(id);if(!el)return;
+  el.classList.add('resolved');
+  const act=document.getElementById(`act-${id}`);
+  if(act)act.innerHTML=`<span style="color:${action==='accept'?'#3fb950':action==='reject'?'#f85149':'#58a6ff'};font-size:10px;font-weight:600">✓ ${action}</span>`;
+  needsReview--;updateStats();
+  team[Math.floor(Math.random()*3)].reviews++;renderTeam();
+}
+
+renderTeam();
+contracts.forEach((c,i)=>setTimeout(()=>loadContract(i),i*3000));
+</script>
+</body>
+</html>
