@@ -81,13 +81,16 @@ A2H is that standard. It defines:
 ```python
 from a2h import Gateway, Participant
 
-# 1. Create gateway
-gw = Gateway()
+# 1. Create gateway (strict mode ensures all participants are registered)
+gw = Gateway(registry_mode="strict")
 
-# 2. Register a human
+# 2. Register participants (humans and agents)
 gw.register(Participant(
-    name="sarah", namespace="sales",
-    role="VP Sales", channels=["dashboard", "slack"],
+    name="sarah", namespace="sales", participant_type="human",
+    role="VP Sales", channels=["dashboard", "slack"]
+))
+gw.register(Participant(
+    name="sales-agent", namespace="ai", participant_type="agent"
 ))
 
 # 3. Agent asks human
@@ -101,7 +104,7 @@ req = await gw.ask("sales/sarah",
     context={"deal_value": 2500000, "bant_score": 87},
     priority="high",
     deadline="4h",
-    from_name="sales-agent",
+    from_participant="ai/sales-agent", # Sender identity is strictly validated
 )
 # req.id = "req_7f3a2b..."
 # req.status = Status.PENDING
@@ -207,6 +210,33 @@ req = await gw.ask("sales/sarah",
 )
 # If Sarah doesn't respond in 10 min → auto-escalates to Tom
 ```
+
+## Participant Registry & Strict Validation
+
+A2H includes a robust `ParticipantRegistry` to manage the identities of both humans and agents. In **strict mode**, the Gateway ensures that no unknown agent can ask a human a question, and no request is sent into the void.
+
+```python
+from a2h import Gateway
+
+# Load participants from a YAML file and enforce strict validation
+gw = Gateway(participants_file="participants.yaml", registry_mode="strict")
+
+# If an unregistered agent tries to send a request:
+await gw.ask(
+    to="sales/sarah",
+    question="Approve?",
+    from_participant="unknown/hacker-bot"
+) # Raises: SenderNotRegistered
+
+# If an agent tries to contact an unregistered human:
+await gw.ask(
+    to="sales/nobody",
+    question="Approve?",
+    from_participant="ai/sales-agent"
+) # Raises: ParticipantNotFound
+```
+
+Participant IDs (`namespace/name`) are strictly validated via regex and frozen upon creation to prevent identity drift.
 
 ## HTTP Transport
 
@@ -367,9 +397,18 @@ a2h/
   __init__.py      # Public API: Gateway, Participant, Interaction, ...
   models.py        # Protocol types (zero dependencies)
   gateway.py       # Core protocol handler
+  registry.py      # Participant identity management
   store.py         # Storage protocol + InMemoryStore
   channels.py      # Delivery channel protocol + LogChannel
   server.py        # FastAPI HTTP transport (optional dependency)
+  callbacks.py     # Async callbacks and webhooks
+  errors.py        # Typed protocol errors
+  testing.py       # Mock channels and auto-responders
+integrations/
+  adk/             # Google ADK tools
+  crewai/          # CrewAI tools
+  langchain/       # LangChain tools
+  openclaw/        # OpenClaw skills
 docs/
   a2h-spec.md      # Full protocol specification
   schemas/         # JSON Schemas for all protocol objects
