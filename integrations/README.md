@@ -16,7 +16,7 @@ client = OpenAI()
 result = await run_with_a2h(client, gw, model="gpt-4o",
     system="Ask humans for approvals over $10K",
     prompt="Approve the MegaInc deal at $2.5M",
-    from_name="sales-agent")
+    from_participant="ai/sales-agent")
 ```
 
 ## Anthropic SDK (Claude)
@@ -33,7 +33,7 @@ client = Anthropic()
 result = await run_with_a2h(client, gw, model="claude-sonnet-4-20250514",
     system="Ask humans for approvals over $10K",
     prompt="Approve the MegaInc deal at $2.5M",
-    from_name="sales-agent")
+    from_participant="ai/sales-agent")
 ```
 
 ## xAI/Grok
@@ -49,7 +49,7 @@ client = create_grok_client()  # uses XAI_API_KEY env var
 result = await run_with_a2h(client, gw, model="grok-3",
     system="Ask humans for approvals",
     prompt="Approve the deal",
-    from_name="sales-agent")
+    from_participant="ai/sales-agent")
 ```
 
 ## Google ADK
@@ -60,7 +60,7 @@ from integrations.adk.a2h_adk import build_a2h_tools
 
 gw = Gateway()
 gw.register(Participant(name="sarah", namespace="sales"))
-tools = build_a2h_tools(gw, from_name="my-agent")
+tools = build_a2h_tools(gw, from_participant="ai/my-agent")
 
 # tools = [FunctionTool(human_ask), FunctionTool(human_check), FunctionTool(human_notify)]
 # Use with: Agent(name="...", tools=tools)
@@ -74,7 +74,7 @@ from integrations.crewai.a2h_crewai import build_a2h_tools
 
 gw = Gateway()
 gw.register(Participant(name="sarah", namespace="sales"))
-tools = build_a2h_tools(gw, from_name="my-agent")
+tools = build_a2h_tools(gw, from_participant="ai/my-agent")
 
 # tools = [HumanAskTool(), HumanNotifyTool(), HumanCheckTool()]
 # Use with: Agent(role="...", tools=tools)
@@ -88,7 +88,7 @@ from integrations.langchain.a2h_langchain import build_a2h_tools
 
 gw = Gateway()
 gw.register(Participant(name="sarah", namespace="sales"))
-tools = build_a2h_tools(gw, from_name="my-agent")
+tools = build_a2h_tools(gw, from_participant="ai/my-agent")
 
 # tools = [StructuredTool(human_ask), StructuredTool(human_check), StructuredTool(human_notify)]
 # Use with: create_tool_calling_agent(llm, tools, prompt=...)

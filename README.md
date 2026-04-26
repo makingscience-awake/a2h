@@ -406,14 +406,26 @@ a2h/
   testing.py       # Mock channels and auto-responders
 integrations/
   adk/             # Google ADK tools
+  anthropic/       # Anthropic Claude tools
   crewai/          # CrewAI tools
   langchain/       # LangChain tools
+  openai/          # OpenAI function calling
   openclaw/        # OpenClaw skills
+  xai/             # xAI Grok tools
+  slack_example.py # Example Slack channel implementation
+examples/
+  customer_support.py         # 7-step realistic workflow
+  advanced_routing_example.py # Escalation & auto-delegation
+  server_webhook_example.py   # FastAPI server + webhooks
+  adk_a2h_example.py          # ADK integration example
+  crewai_a2h_example.py       # CrewAI integration example
+  langchain_a2h_example.py    # LangChain integration example
 docs/
   a2h-spec.md      # Full protocol specification
   schemas/         # JSON Schemas for all protocol objects
 tests/
-  test_protocol.py # 27 conformance tests
+  test_protocol.py # Core protocol conformance tests
+  test_registry.py # Registry and validation tests (100 total tests)
 ```
 
 ## Install
