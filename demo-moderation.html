@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A2H Demo — Content Moderation</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0d1117;color:#c9d1d9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+.header{display:flex;justify-content:space-between;align-items:center;padding:10px 20px;border-bottom:1px solid #21262d}
+.header h1{font-size:18px;color:#f0f6fc}
+.header h1 span{color:#8b949e;font-weight:400;font-size:13px}
+.stats{display:flex;gap:20px}
+.stat{text-align:center}
+.stat .n{font-size:22px;font-weight:800}
+.stat .l{font-size:9px;color:#484f58;text-transform:uppercase;letter-spacing:1px}
+.s-scanned .n{color:#58a6ff}
+.s-auto .n{color:#3fb950}
+.s-pending .n{color:#e3b341}
+.s-removed .n{color:#f85149}
+
+.main{display:grid;grid-template-columns:1fr 320px;gap:0;height:calc(100vh - 48px)}
+
+/* Feed */
+.feed{padding:10px;overflow-y:auto}
+.feed-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.feed-header h3{font-size:12px;color:#484f58;text-transform:uppercase;letter-spacing:1px}
+.filter-bar{display:flex;gap:4px}
+.filter{padding:3px 10px;border-radius:4px;font-size:10px;background:#21262d;color:#8b949e;border:1px solid #30363d;cursor:pointer}
+.filter.active{background:#1c2941;color:#58a6ff;border-color:#1f6feb}
+
+.content-card{background:#161b22;border:1px solid #30363d;border-radius:10px;margin:6px 0;overflow:hidden;animation:fadeIn 0.3s}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.content-card.removed{border-color:#da3633;opacity:0.4}
+.content-card.approved{border-color:#238636;opacity:0.6}
+.content-card.auto{border-color:#e3b341}
+
+.card-top{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#0d1117}
+.card-user{font-size:11px;color:#8b949e}
+.card-user strong{color:#c9d1d9}
+.card-type{padding:2px 8px;border-radius:3px;font-size:9px;font-weight:600}
+.type-post{background:#1c2941;color:#58a6ff}
+.type-review{background:#2a1f33;color:#bc8cff}
+.type-listing{background:#2a2517;color:#e3b341}
+.type-comment{background:#21262d;color:#8b949e}
+
+.card-body{padding:10px 12px}
+.card-text{font-size:12px;line-height:1.5;margin-bottom:6px}
+.card-image{width:100%;height:80px;border-radius:6px;margin:6px 0;object-fit:cover;background:linear-gradient(135deg,#21262d,#161b22);display:flex;align-items:center;justify-content:center;font-size:10px;color:#484f58}
+
+.violation-box{background:#3a1a1a;border:1px solid #da3633;border-radius:6px;padding:6px 8px;margin:6px 0;font-size:10px}
+.violation-box .label{color:#f85149;font-weight:600;font-size:11px}
+.violation-box .detail{color:#ff7b72;margin-top:2px}
+
+.confidence{display:flex;align-items:center;gap:6px;margin:6px 0;font-size:10px}
+.conf-bar{flex:1;height:6px;background:#30363d;border-radius:3px;overflow:hidden}
+.conf-fill{height:100%;border-radius:3px;transition:width 0.5s}
+.conf-high{background:#f85149}
+.conf-medium{background:#e3b341}
+.conf-low{background:#3fb950}
+
+.past-decisions{font-size:9px;color:#484f58;margin:4px 0}
+
+.card-actions{padding:8px 12px;border-top:1px solid #21262d;display:flex;gap:4px;flex-wrap:wrap}
+.btn{padding:4px 12px;border-radius:5px;border:none;font-size:10px;font-weight:600;cursor:pointer}
+.btn-remove{background:#da3633;color:#fff}
+.btn-approve{background:#238636;color:#fff}
+.btn-escalate{background:#8957e5;color:#fff}
+.btn-ghost{background:#21262d;color:#c9d1d9;border:1px solid #30363d}
+.btn:hover{opacity:0.85}
+
+.auto-badge{background:#2a2517;color:#e3b341;padding:4px 10px;border-radius:5px;font-size:10px;font-weight:600}
+
+/* Right panel */
+.right{background:#161b22;border-left:1px solid #21262d;padding:10px;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
+.right h3{font-size:11px;color:#484f58;text-transform:uppercase;letter-spacing:1px}
+
+.mod-card{background:#21262d;border-radius:6px;padding:8px;font-size:11px}
+.mod-card .mname{font-weight:700;color:#f0f6fc;font-size:12px}
+.mod-card .mrole{color:#8b949e;font-size:10px}
+.mod-card .mstats{display:flex;gap:8px;margin-top:4px;font-size:9px;color:#484f58}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:3px}
+.dot-on{background:#3fb950}
+.dot-off{background:#484f58}
+
+.rules-box{background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:8px;font-size:10px}
+.rule{margin:3px 0;padding:3px 0;border-bottom:1px solid #161b22}
+.rule .rname{color:#e3b341;font-weight:600}
+.rule .rdesc{color:#8b949e}
+
+.heatmap{background:#0d1117;border-radius:6px;padding:8px}
+.heat-row{display:flex;align-items:center;gap:4px;margin:2px 0;font-size:10px}
+.heat-bar{height:8px;border-radius:2px;transition:width 0.5s}
+
+.log{flex:1;background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:6px;overflow-y:auto;font-family:'SF Mono',monospace;font-size:9px;min-height:100px}
+.log-e{padding:1px 0;color:#484f58;border-bottom:1px solid #161b22}
+.log-e .a{font-weight:600}
+.a-scan{color:#58a6ff}.a-auto{color:#e3b341}.a-flag{color:#f85149}.a-ok{color:#3fb950}.a-esc{color:#bc8cff}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Content Moderation <span>— A2H Auto-Delegation + Escalation</span></h1>
+  <div class="stats">
+    <div class="stat s-scanned"><div class="n" id="s-scanned">0</div><div class="l">Scanned</div></div>
+    <div class="stat s-auto"><div class="n" id="s-auto">0</div><div class="l">Auto-Actioned</div></div>
+    <div class="stat s-pending"><div class="n" id="s-pending">0</div><div class="l">Needs Review</div></div>
+    <div class="stat s-removed"><div class="n" id="s-removed">0</div><div class="l">Removed</div></div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="feed">
+    <div class="feed-header">
+      <h3>Moderation Queue</h3>
+      <div class="filter-bar">
+        <div class="filter active" onclick="setFilter('all',this)">All</div>
+        <div class="filter" onclick="setFilter('pending',this)">Pending</div>
+        <div class="filter" onclick="setFilter('auto',this)">Auto</div>
+        <div class="filter" onclick="setFilter('escalated',this)">Escalated</div>
+      </div>
+    </div>
+    <div id="feed"></div>
+  </div>
+
+  <div class="right">
+    <h3>Moderators</h3>
+    <div id="moderators"></div>
+    <h3>Auto-Delegation Rules</h3>
+    <div class="rules-box" id="rules"></div>
+    <h3>Violation Heatmap</h3>
+    <div class="heatmap" id="heatmap"></div>
+    <h3>Log</h3>
+    <div class="log" id="log"></div>
+  </div>
+</div>
+
+<script>
+// State
+let scanned=0, autoActioned=0, pending=0, removed=0;
+let contentId = 0;
+let currentFilter = 'all';
+
+const violations = {
+  spam: {color:'#58a6ff',count:0},
+  hate_speech: {color:'#f85149',count:0},
+  nudity: {color:'#bc8cff',count:0},
+  fraud: {color:'#e3b341',count:0},
+  copyright: {color:'#ff7b72',count:0},
+  misinformation: {color:'#f0883e',count:0},
+};
+
+const moderators = [
+  {name:'Alex Rivera',role:'Senior Moderator',online:true,reviewed:0,accuracy:97},
+  {name:'Kim Nguyen',role:'Moderator',online:true,reviewed:0,accuracy:94},
+  {name:'Jordan Lee',role:'Trust & Safety Lead',online:true,reviewed:0,accuracy:99},
+];
+
+const autoRules = [
+  {name:'spam_high_conf', desc:'Spam with confidence > 95% → auto-remove', threshold:0.95, action:'remove'},
+  {name:'duplicate_exact', desc:'Exact duplicate content → auto-remove', threshold:1.0, action:'remove'},
+  {name:'verified_user', desc:'Verified user + confidence < 50% → auto-approve', threshold:0.5, action:'approve'},
+  {name:'nudity_any', desc:'Nudity detected (any confidence) → hold for human', threshold:0, action:'review'},
+];
+
+const contentTemplates = [
+  // Clean content
+  {text:'Just launched our new product! Check it out at our website. Really excited about this.',type:'post',user:'@techstartup',clean:true},
+  {text:'Great customer service! Problem resolved in minutes. Would recommend.',type:'review',user:'@happycustomer',clean:true},
+  {text:'Beautiful handmade jewelry, ships worldwide. DM for custom orders.',type:'listing',user:'@artisan_shop',clean:true},
+  {text:'Interesting article about AI agents and human collaboration.',type:'comment',user:'@researcher',clean:true},
+
+  // Violations
+  {text:'🚨 LIMITED TIME: Buy followers, likes, and views! DM us NOW for prices!!!',type:'post',user:'@spam_bot_42',violation:'spam',confidence:0.97},
+  {text:'FREE IPHONE!!! Click this link to claim your prize right now!!!',type:'comment',user:'@giveaway_scam',violation:'spam',confidence:0.99},
+  {text:'[Content contains hate speech targeting ethnic group]',type:'post',user:'@anonymous_troll',violation:'hate_speech',confidence:0.88},
+  {text:'Selling premium accounts with stolen credentials. Cheap prices.',type:'listing',user:'@black_market',violation:'fraud',confidence:0.92},
+  {text:'This product is made from [copyrighted character] designs without permission.',type:'listing',user:'@knockoff_store',violation:'copyright',confidence:0.78},
+  {text:'[Profile photo flagged — potential nudity detected]',type:'post',user:'@new_user_8847',violation:'nudity',confidence:0.65},
+  {text:'EXPOSED: The secret cure doctors don\'t want you to know about!!',type:'post',user:'@healthtruth',violation:'misinformation',confidence:0.72},
+  {text:'Buy this miracle supplement — clinically proven to cure everything!',type:'listing',user:'@supplement_king',violation:'misinformation',confidence:0.85},
+
+  // Borderline
+  {text:'Our competitor\'s product is terrible, here\'s why ours is better... [comparison]',type:'post',user:'@competitor_co',violation:'spam',confidence:0.35},
+  {text:'Sharing my personal experience with alternative medicine treatments.',type:'comment',user:'@wellness_journey',violation:'misinformation',confidence:0.42},
+];
+
+function log(action,detail,cls=''){
+  const t=new Date().toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const el=document.getElementById('log');
+  el.innerHTML+=`<div class="log-e"><span class="t" style="color:#30363d">${t}</span> <span class="a a-${cls}">[${action}]</span> ${detail}</div>`;
+  el.scrollTop=el.scrollHeight;
+}
+
+function renderModerators(){
+  document.getElementById('moderators').innerHTML=moderators.map(m=>`
+    <div class="mod-card">
+      <div class="mname"><span class="dot dot-${m.online?'on':'off'}"></span>${m.name}</div>
+      <div class="mrole">${m.role}</div>
+      <div class="mstats"><span>Reviewed: ${m.reviewed}</span><span>Accuracy: ${m.accuracy}%</span></div>
+    </div>`).join('');
+}
+
+function renderRules(){
+  document.getElementById('rules').innerHTML=autoRules.map(r=>`
+    <div class="rule"><span class="rname">${r.name}</span><div class="rdesc">${r.desc}</div></div>`).join('');
+}
+
+function renderHeatmap(){
+  const max=Math.max(...Object.values(violations).map(v=>v.count),1);
+  document.getElementById('heatmap').innerHTML=Object.entries(violations).map(([name,v])=>`
+    <div class="heat-row">
+      <span style="width:80px;color:${v.color}">${name.replace('_',' ')}</span>
+      <div class="conf-bar" style="flex:1"><div class="heat-bar" style="width:${(v.count/max)*100}%;background:${v.color}"></div></div>
+      <span style="width:20px;text-align:right">${v.count}</span>
+    </div>`).join('');
+}
+
+function updateStats(){
+  document.getElementById('s-scanned').textContent=scanned;
+  document.getElementById('s-auto').textContent=autoActioned;
+  document.getElementById('s-pending').textContent=pending;
+  document.getElementById('s-removed').textContent=removed;
+}
+
+function confClass(c){ return c>0.8?'conf-high':c>0.5?'conf-medium':'conf-low'; }
+
+function setFilter(f,el){
+  currentFilter=f;
+  document.querySelectorAll('.filter').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.content-card').forEach(card=>{
+    if(f==='all') card.style.display='';
+    else if(f==='pending') card.style.display=card.dataset.status==='pending'?'':'none';
+    else if(f==='auto') card.style.display=card.dataset.status==='auto'?'':'none';
+    else if(f==='escalated') card.style.display=card.dataset.status==='escalated'?'':'none';
+  });
+}
+
+function processContent(){
+  const template=contentTemplates[Math.floor(Math.random()*contentTemplates.length)];
+  contentId++;
+  scanned++;
+  const id=`c-${contentId}`;
+
+  log('scan',`Scanned #${contentId}: ${template.type} by ${template.user}`,'scan');
+
+  if(template.clean){
+    // Auto-approve clean content
+    autoActioned++;
+    updateStats();
+    log('auto',`#${contentId} clean — auto-approved`,'auto');
+    addCard(id,template,'auto','approved');
+    return;
+  }
+
+  // Has violation
+  violations[template.violation].count++;
+  renderHeatmap();
+
+  // Check auto-delegation rules
+  if(template.violation==='spam' && template.confidence>0.95){
+    autoActioned++;
+    removed++;
+    updateStats();
+    log('auto',`#${contentId} spam (${(template.confidence*100).toFixed(0)}% conf) → auto-removed`,'auto');
+    addCard(id,template,'auto','removed');
+    return;
+  }
+
+  if(template.violation==='nudity'){
+    pending++;
+    updateStats();
+    log('flag',`#${contentId} nudity (${(template.confidence*100).toFixed(0)}% conf) → ALWAYS requires human review`,'flag');
+    addCard(id,template,'pending','pending');
+
+    // A2H to senior moderator
+    setTimeout(()=>{
+      const mod=moderators[2]; // Trust & Safety Lead
+      log('a2h',`AI Scanner → ${mod.name}: nudity review required`,'esc');
+      addEscalationNote(id,mod.name);
+    },500);
+    return;
+  }
+
+  if(template.confidence>0.8){
+    // High confidence — send to moderator
+    pending++;
+    updateStats();
+    const mod=moderators[Math.floor(Math.random()*2)];
+    log('flag',`#${contentId} ${template.violation} (${(template.confidence*100).toFixed(0)}% conf) → ${mod.name}`,'flag');
+    addCard(id,template,'pending','pending');
+    return;
+  }
+
+  // Low confidence — borderline, needs human
+  pending++;
+  updateStats();
+  log('flag',`#${contentId} ${template.violation} (${(template.confidence*100).toFixed(0)}% conf) — borderline, needs review`,'flag');
+  addCard(id,template,'pending','pending');
+}
+
+function addCard(id,template,status,visualClass){
+  const feed=document.getElementById('feed');
+  const hasViolation=!template.clean;
+  const conf=template.confidence||0;
+
+  let violationHtml='';
+  if(hasViolation){
+    violationHtml=`<div class="violation-box">
+      <div class="label">⚠️ ${(template.violation||'').replace('_',' ').toUpperCase()}</div>
+      <div class="detail">AI detected: ${template.violation} content</div>
+    </div>
+    <div class="confidence">
+      <span>Confidence:</span>
+      <div class="conf-bar"><div class="conf-fill ${confClass(conf)}" style="width:${conf*100}%"></div></div>
+      <span>${(conf*100).toFixed(0)}%</span>
+    </div>`;
+  }
+
+  let actionsHtml='';
+  if(status==='pending'){
+    actionsHtml=`<div class="card-actions">
+      <button class="btn btn-remove" onclick="moderate('${id}','remove')">🗑 Remove</button>
+      <button class="btn btn-approve" onclick="moderate('${id}','approve')">✅ Approve</button>
+      <button class="btn btn-escalate" onclick="moderate('${id}','escalate')">⬆️ Escalate</button>
+      <button class="btn btn-ghost" onclick="moderate('${id}','warn')">⚠️ Warn User</button>
+    </div>`;
+  } else if(status==='auto'){
+    actionsHtml=`<div class="card-actions"><span class="auto-badge">🤖 Auto-${visualClass==='removed'?'removed':'approved'}</span></div>`;
+  }
+
+  const typeClass={'post':'type-post','review':'type-review','listing':'type-listing','comment':'type-comment'}[template.type]||'type-post';
+
+  const html=`<div class="content-card ${visualClass}" id="${id}" data-status="${status}">
+    <div class="card-top">
+      <div class="card-user"><strong>${template.user}</strong> · ${new Date().toLocaleTimeString()}</div>
+      <span class="card-type ${typeClass}">${template.type}</span>
+    </div>
+    <div class="card-body">
+      <div class="card-text">${template.text}</div>
+      ${violationHtml}
+    </div>
+    ${actionsHtml}
+  </div>`;
+
+  feed.insertAdjacentHTML('afterbegin',html);
+
+  // Apply current filter
+  if(currentFilter!=='all'){
+    const card=document.getElementById(id);
+    if(currentFilter!==status) card.style.display='none';
+  }
+}
+
+function addEscalationNote(id,modName){
+  const card=document.getElementById(id);
+  if(!card) return;
+  const body=card.querySelector('.card-body');
+  body.innerHTML+=`<div style="background:#2a1f33;border:1px solid #8957e5;border-radius:6px;padding:6px;margin:4px 0;font-size:10px;color:#bc8cff">
+    <strong>A2H Escalated</strong> → ${modName} (Trust & Safety)<br>
+    <small>Nudity content always requires human review per policy</small>
+  </div>`;
+  card.dataset.status='escalated';
+}
+
+function moderate(id,action){
+  const card=document.getElementById(id);
+  if(!card) return;
+  pending--;
+
+  if(action==='remove'){
+    card.classList.add('removed');
+    removed++;
+    log('ok',`Moderator removed #${id.replace('c-','')}`, 'flag');
+  } else if(action==='approve'){
+    card.classList.add('approved');
+    log('ok',`Moderator approved #${id.replace('c-','')}`, 'ok');
+  } else if(action==='escalate'){
+    card.dataset.status='escalated';
+    addEscalationNote(id,moderators[2].name);
+    pending++;
+    log('a2h',`Escalated #${id.replace('c-','')} → ${moderators[2].name}`, 'esc');
+  } else if(action==='warn'){
+    card.classList.add('approved');
+    log('ok',`Warning issued for #${id.replace('c-','')}`, 'ok');
+  }
+
+  const actionsEl=card.querySelector('.card-actions');
+  if(actionsEl) actionsEl.innerHTML=`<span style="color:${action==='remove'?'#f85149':'#3fb950'};font-size:10px;font-weight:600">✓ ${action.charAt(0).toUpperCase()+action.slice(1)}${action==='remove'?'d':action==='approve'?'d':action==='escalate'?'d':'ed'}</span>`;
+
+  moderators[Math.floor(Math.random()*moderators.length)].reviewed++;
+  renderModerators();
+  updateStats();
+}
+
+// Init
+renderModerators();
+renderRules();
+renderHeatmap();
+
+// Process content every 3-6 seconds
+function scheduleContent(){
+  const delay=3000+Math.random()*3000;
+  setTimeout(()=>{ processContent(); scheduleContent(); },delay);
+}
+processContent();
+setTimeout(processContent,1000);
+setTimeout(processContent,2500);
+scheduleContent();
+</script>
+</body>
+</html>

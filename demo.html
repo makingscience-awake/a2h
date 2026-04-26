@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A2H Protocol — Interactive Demo</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0d1117;color:#c9d1d9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,sans-serif;overflow-x:hidden}
+h1{text-align:center;padding:16px;color:#f0f6fc;font-size:22px}
+h1 span{color:#8b949e;font-weight:400;font-size:14px}
+
+.layout{display:grid;grid-template-columns:1fr 100px 1fr;gap:0;height:calc(100vh - 120px);padding:0 16px}
+.panel{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:16px;overflow-y:auto}
+.panel h2{font-size:14px;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #21262d}
+.agent-panel h2{color:#3fb950}
+.human-panel h2{color:#bc8cff}
+
+/* Wire */
+.wire{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;position:relative}
+.wire-line{width:2px;height:100%;background:linear-gradient(180deg,#30363d 0%,#58a6ff 50%,#30363d 100%);position:absolute;opacity:0.3}
+.wire-msg{background:#1c2941;border:1px solid #1f6feb;border-radius:8px;padding:6px 10px;font-size:10px;color:#58a6ff;z-index:1;animation:pulse 0.5s;max-width:90px;text-align:center;font-weight:600}
+.wire-msg.response{background:#2a1f33;border-color:#8957e5;color:#bc8cff}
+@keyframes pulse{0%{transform:scale(0.8);opacity:0}100%{transform:scale(1);opacity:1}}
+
+/* Cards */
+.participant{background:#21262d;border:1px solid #30363d;border-radius:8px;padding:10px;margin:6px 0;font-size:12px}
+.participant .name{font-weight:700;font-size:13px;color:#f0f6fc}
+.participant .role{color:#8b949e;font-size:11px}
+.participant .badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:600;margin-left:4px}
+.badge-human{background:#2a1f33;color:#bc8cff}
+.badge-agent{background:#1f2a22;color:#3fb950}
+.badge-verified{background:#1a3a2a;color:#3fb950}
+.badge-state{background:#2a2517;color:#e3b341}
+
+/* Request card */
+.request-card{background:#161b22;border:2px solid #1f6feb;border-radius:10px;padding:14px;margin:8px 0;animation:slideIn 0.3s}
+@keyframes slideIn{0%{transform:translateX(20px);opacity:0}100%{transform:translateX(0);opacity:1}}
+.request-card .from{font-size:10px;color:#3fb950;margin-bottom:6px}
+.request-card .question{font-size:13px;color:#f0f6fc;font-weight:600;margin-bottom:8px}
+.request-card .context{background:#0d1117;border-radius:6px;padding:8px;margin:6px 0;font-size:11px;color:#8b949e}
+.request-card .context .key{color:#f0883e}
+.request-card .deadline{font-size:10px;color:#e3b341;margin:6px 0}
+.request-card .actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.btn{padding:6px 14px;border-radius:6px;border:none;font-size:11px;font-weight:600;cursor:pointer;transition:all 0.15s}
+.btn:hover{transform:translateY(-1px)}
+.btn-approve{background:#238636;color:#fff}
+.btn-reject{background:#da3633;color:#fff}
+.btn-choice{background:#1f6feb;color:#fff}
+.btn-secondary{background:#21262d;color:#c9d1d9;border:1px solid #30363d}
+
+/* Notification */
+.notification{background:#161b22;border-left:3px solid #58a6ff;border-radius:0 8px 8px 0;padding:10px;margin:6px 0;font-size:11px;animation:slideIn 0.3s}
+.notification.success{border-color:#3fb950}
+.notification.warning{border-color:#d29922}
+
+/* Scenarios */
+.scenarios{display:flex;gap:6px;padding:8px 16px;justify-content:center;flex-wrap:wrap}
+.scenario-btn{background:#21262d;border:1px solid #30363d;color:#c9d1d9;padding:8px 16px;border-radius:8px;font-size:12px;cursor:pointer;transition:all 0.15s}
+.scenario-btn:hover{border-color:#58a6ff;color:#58a6ff}
+.scenario-btn.active{background:#1c2941;border-color:#1f6feb;color:#58a6ff}
+
+/* Event log */
+.log{background:#0d1117;border:1px solid #21262d;border-radius:8px;margin:8px 16px;padding:8px 12px;max-height:120px;overflow-y:auto;font-family:'SF Mono',monospace;font-size:10px}
+.log-entry{padding:2px 0;border-bottom:1px solid #161b22;color:#8b949e}
+.log-entry .time{color:#484f58}
+.log-entry .action{color:#58a6ff;font-weight:600}
+.log-entry .detail{color:#c9d1d9}
+.log-entry.allow .action{color:#3fb950}
+.log-entry.deny .action{color:#f85149}
+.log-entry.auto .action{color:#e3b341}
+
+/* JSON viewer */
+.json-view{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px;margin:6px 0;font-family:'SF Mono',monospace;font-size:10px;color:#8b949e;max-height:150px;overflow-y:auto;display:none}
+.json-view.visible{display:block}
+.toggle-json{font-size:10px;color:#484f58;cursor:pointer;text-decoration:underline}
+</style>
+</head>
+<body>
+
+<h1>A2H Protocol <span>— Interactive Demo</span></h1>
+
+<div class="scenarios">
+  <button class="scenario-btn active" onclick="runScenario('approval')">Approval Flow</button>
+  <button class="scenario-btn" onclick="runScenario('choice')">Multi-Choice</button>
+  <button class="scenario-btn" onclick="runScenario('delegation')">Auto-Delegation</button>
+  <button class="scenario-btn" onclick="runScenario('escalation')">Escalation Chain</button>
+  <button class="scenario-btn" onclick="runScenario('notification')">Notification</button>
+  <button class="scenario-btn" onclick="runScenario('full')">Full Workflow</button>
+</div>
+
+<div class="layout">
+  <!-- Agent Panel -->
+  <div class="panel agent-panel">
+    <h2>Agent Side</h2>
+    <div id="agents"></div>
+    <div id="agent-actions"></div>
+  </div>
+
+  <!-- Wire -->
+  <div class="wire">
+    <div class="wire-line"></div>
+    <div id="wire-messages"></div>
+  </div>
+
+  <!-- Human Panel -->
+  <div class="panel human-panel">
+    <h2>Human Side</h2>
+    <div id="humans"></div>
+    <div id="pending-requests"></div>
+  </div>
+</div>
+
+<div class="log" id="log"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// A2H Protocol — In-browser implementation
+// ═══════════════════════════════════════════════════════════════
+
+const state = {
+  participants: {},
+  requests: {},
+  log: [],
+  reqCounter: 0,
+};
+
+function pid(ns, name) { return `${ns}/${name}`; }
+
+function registerParticipant(name, namespace, type, opts = {}) {
+  const p = { name, namespace, type, pid: pid(namespace, name),
+    role: opts.role || '', channels: opts.channels || ['dashboard'],
+    state: 'available', delegate: opts.delegate || null,
+    delegationRules: opts.delegationRules || [],
+    verified: opts.verified !== false, trustLevel: 'verified',
+    ...opts };
+  state.participants[p.pid] = p;
+  return p;
+}
+
+function createRequest(fromPid, toPid, question, responseType, opts = {}) {
+  const id = `req_${String(++state.reqCounter).padStart(3, '0')}`;
+  const req = {
+    id, protocol: 'a2h/v1', fromPid, toPid, question, responseType,
+    options: opts.options || [], context: opts.context || {},
+    priority: opts.priority || 'medium', status: 'pending',
+    response: null, createdAt: new Date().toISOString(),
+    deadline: opts.deadline || '4h',
+  };
+  state.requests[id] = req;
+  return req;
+}
+
+function respond(reqId, response, channel = 'dashboard') {
+  const req = state.requests[reqId];
+  if (!req || req.status !== 'pending') return false;
+  req.response = { ...response, channel, respondedAt: new Date().toISOString() };
+  req.status = 'answered';
+  return true;
+}
+
+function checkDelegation(toPid, req) {
+  const p = state.participants[toPid];
+  if (!p || !p.delegationRules) return null;
+  for (const rule of p.delegationRules) {
+    let match = true;
+    if (rule.responseType && req.responseType !== rule.responseType) match = false;
+    if (rule.contextConditions) {
+      for (const [key, cond] of Object.entries(rule.contextConditions)) {
+        const val = req.context[key];
+        if (cond.lt && !(val < cond.lt)) match = false;
+        if (cond.gt && !(val > cond.gt)) match = false;
+      }
+    }
+    if (match) return rule.autoResponse;
+  }
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// UI Rendering
+// ═══════════════════════════════════════════════════════════════
+
+function log(action, detail, cls = '') {
+  const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  state.log.push({ time, action, detail, cls });
+  const el = document.getElementById('log');
+  el.innerHTML += `<div class="log-entry ${cls}"><span class="time">${time}</span> <span class="action">[${action}]</span> <span class="detail">${detail}</span></div>`;
+  el.scrollTop = el.scrollHeight;
+}
+
+function renderParticipants() {
+  const agentsEl = document.getElementById('agents');
+  const humansEl = document.getElementById('humans');
+  agentsEl.innerHTML = '';
+  humansEl.innerHTML = '';
+
+  for (const p of Object.values(state.participants)) {
+    const badge = p.type === 'human' ? '<span class="badge badge-human">human</span>' : '<span class="badge badge-agent">agent</span>';
+    const verified = p.verified ? '<span class="badge badge-verified">✓ verified</span>' : '';
+    const stateB = p.type === 'human' ? `<span class="badge badge-state">${p.state}</span>` : '';
+    const html = `<div class="participant"><div class="name">${p.name} ${badge} ${verified} ${stateB}</div><div class="role">${p.role || p.pid}</div></div>`;
+    if (p.type === 'agent') agentsEl.innerHTML += html;
+    else humansEl.innerHTML += html;
+  }
+}
+
+function addWireMessage(text, isResponse = false) {
+  const el = document.getElementById('wire-messages');
+  const div = document.createElement('div');
+  div.className = `wire-msg ${isResponse ? 'response' : ''}`;
+  div.textContent = text;
+  el.appendChild(div);
+  setTimeout(() => { if (el.children.length > 6) el.removeChild(el.firstChild); }, 5000);
+}
+
+function renderRequest(req) {
+  const p = state.participants[req.toPid];
+  const from = state.participants[req.fromPid];
+  const el = document.getElementById('pending-requests');
+
+  let contextHtml = '';
+  for (const [k, v] of Object.entries(req.context)) {
+    contextHtml += `<div><span class="key">${k}:</span> ${typeof v === 'number' ? v.toLocaleString() : v}</div>`;
+  }
+
+  let actionsHtml = '';
+  if (req.responseType === 'approval') {
+    actionsHtml = `<button class="btn btn-approve" onclick="handleRespond('${req.id}', {approved:true})">✅ Approve</button>
+                   <button class="btn btn-reject" onclick="handleRespond('${req.id}', {approved:false})">❌ Reject</button>`;
+  } else if (req.responseType === 'choice' && req.options.length) {
+    actionsHtml = req.options.map(o =>
+      `<button class="btn btn-choice" onclick="handleRespond('${req.id}', {value:'${o.value}'})">${o.label}</button>`
+    ).join('');
+  } else if (req.responseType === 'confirm') {
+    actionsHtml = `<button class="btn btn-approve" onclick="handleRespond('${req.id}', {confirmed:true})">Yes</button>
+                   <button class="btn btn-secondary" onclick="handleRespond('${req.id}', {confirmed:false})">No</button>`;
+  } else {
+    actionsHtml = `<button class="btn btn-approve" onclick="handleRespond('${req.id}', {text:'Looks good'})">Respond</button>`;
+  }
+
+  const card = `<div class="request-card" id="req-${req.id}">
+    <div class="from">🤖 ${from ? from.name : req.fromPid} ${from && from.verified ? '✓' : ''}</div>
+    <div class="question">${req.question}</div>
+    ${contextHtml ? `<div class="context">${contextHtml}</div>` : ''}
+    <div class="deadline">⏰ Deadline: ${req.deadline} | Priority: ${req.priority}</div>
+    <div class="actions">${actionsHtml}</div>
+    <div class="toggle-json" onclick="toggleJson('${req.id}')">Show JSON</div>
+    <div class="json-view" id="json-${req.id}"><pre>${JSON.stringify(req, null, 2)}</pre></div>
+  </div>`;
+  el.innerHTML += card;
+}
+
+function renderNotification(message, severity = 'info') {
+  const el = document.getElementById('pending-requests');
+  el.innerHTML += `<div class="notification ${severity}">📋 ${message}</div>`;
+}
+
+function handleRespond(reqId, response) {
+  respond(reqId, response);
+  const req = state.requests[reqId];
+  const card = document.getElementById(`req-${reqId}`);
+  if (card) {
+    card.style.opacity = '0.5';
+    card.querySelector('.actions').innerHTML = `<span style="color:#3fb950;font-size:12px">✓ Responded: ${JSON.stringify(response)}</span>`;
+  }
+  addWireMessage('response', true);
+  log('a2h.respond', `${req.toPid} → ${req.fromPid}: ${JSON.stringify(response)}`, 'allow');
+
+  // Show result on agent side
+  const agentActions = document.getElementById('agent-actions');
+  agentActions.innerHTML += `<div class="notification success">Response received for ${reqId}: ${JSON.stringify(response)}</div>`;
+}
+
+function toggleJson(reqId) {
+  const el = document.getElementById(`json-${reqId}`);
+  el.classList.toggle('visible');
+}
+
+function clearUI() {
+  document.getElementById('agents').innerHTML = '';
+  document.getElementById('humans').innerHTML = '';
+  document.getElementById('pending-requests').innerHTML = '';
+  document.getElementById('agent-actions').innerHTML = '';
+  document.getElementById('wire-messages').innerHTML = '';
+  document.getElementById('log').innerHTML = '';
+  state.participants = {};
+  state.requests = {};
+  state.log = [];
+  state.reqCounter = 0;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Scenarios
+// ═══════════════════════════════════════════════════════════════
+
+async function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function runScenario(name) {
+  document.querySelectorAll('.scenario-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  clearUI();
+
+  if (name === 'approval') await scenarioApproval();
+  else if (name === 'choice') await scenarioChoice();
+  else if (name === 'delegation') await scenarioDelegation();
+  else if (name === 'escalation') await scenarioEscalation();
+  else if (name === 'notification') await scenarioNotification();
+  else if (name === 'full') await scenarioFull();
+}
+
+async function scenarioApproval() {
+  registerParticipant('sales-agent', 'sales', 'agent', { role: 'Qualifies enterprise leads' });
+  registerParticipant('sarah', 'sales', 'human', { role: 'VP Sales', channels: ['dashboard', 'slack'] });
+  renderParticipants();
+  log('register', 'Registered sales/sales-agent (agent) and sales/sarah (human)');
+
+  await delay(500);
+  log('a2h.ask', 'sales-agent → sarah: "Approve the MegaInc deal at $2.5M?"');
+  addWireMessage('human_ask');
+
+  await delay(300);
+  const req = createRequest('sales/sales-agent', 'sales/sarah',
+    'Should we proceed with the MegaInc deal at $2.5M?', 'approval',
+    { context: { deal_value: 2500000, bant_score: 87, risk_level: 'medium', recommendation: 'approve' },
+      priority: 'high', deadline: '4 hours' });
+  renderRequest(req);
+  log('a2h.pending', `Request ${req.id} delivered to sarah's dashboard`, 'allow');
+
+  const agentActions = document.getElementById('agent-actions');
+  agentActions.innerHTML = `<div class="notification">⏳ Waiting for sarah to respond to ${req.id}...</div>`;
+}
+
+async function scenarioChoice() {
+  registerParticipant('support-bot', 'support', 'agent', { role: 'Triages tickets' });
+  registerParticipant('rachel', 'support', 'human', { role: 'Team Lead', channels: ['dashboard', 'slack'] });
+  renderParticipants();
+
+  await delay(500);
+  log('a2h.ask', 'support-bot → rachel: compensation decision');
+  addWireMessage('human_ask');
+
+  await delay(300);
+  const req = createRequest('support/support-bot', 'support/rachel',
+    'Customer Jane Smith contacted 3 times about duplicate charge. How should we compensate?', 'choice',
+    { options: [
+        { label: '1 month free', value: '1_month', description: 'Credit $41.58' },
+        { label: '2 months free', value: '2_months', description: 'Credit $83.17' },
+        { label: 'No credit', value: 'none', description: 'Refund only' },
+        { label: 'Custom amount', value: 'custom', description: 'Enter manually' },
+      ],
+      context: { customer: 'Jane Smith', tier: 'Premium', lifetime_value: 14000, contacts: 3, issue: 'duplicate_charge' },
+      priority: 'medium', deadline: '2 hours' });
+  renderRequest(req);
+  log('a2h.pending', `Choice request ${req.id} delivered`, 'allow');
+}
+
+async function scenarioDelegation() {
+  registerParticipant('expense-bot', 'finance', 'agent', { role: 'Processes expenses' });
+  registerParticipant('priya', 'finance', 'human', { role: 'Finance Lead',
+    delegationRules: [{
+      name: 'auto_approve_small',
+      responseType: 'approval',
+      contextConditions: { amount: { lt: 500 } },
+      autoResponse: { approved: true, reason: 'Auto-approved: under $500 threshold' },
+    }]
+  });
+  renderParticipants();
+
+  await delay(500);
+  log('a2h.ask', 'expense-bot → priya: "Approve $200 office supplies?"');
+  addWireMessage('human_ask');
+
+  await delay(300);
+  const req = createRequest('finance/expense-bot', 'finance/priya',
+    'Approve purchase of office supplies for $200?', 'approval',
+    { context: { amount: 200, vendor: 'Staples', category: 'office_supplies' }, priority: 'low' });
+
+  // Check delegation
+  const autoResp = checkDelegation('finance/priya', req);
+  if (autoResp) {
+    req.status = 'auto_delegated';
+    req.response = { ...autoResp, channel: 'auto_delegation' };
+    log('a2h.auto_delegated', `Rule matched: amount $200 < $500 threshold`, 'auto');
+    addWireMessage('AUTO ✓', true);
+
+    await delay(300);
+    const el = document.getElementById('pending-requests');
+    el.innerHTML += `<div class="notification success">✅ Auto-delegated: ${autoResp.reason}<br><small>No human action needed — Priya sees a notification</small></div>`;
+
+    const agentActions = document.getElementById('agent-actions');
+    agentActions.innerHTML = `<div class="notification success">Instant response: ${JSON.stringify(autoResp)}<br><small>Delegation rule handled it — no waiting</small></div>`;
+    log('a2h.complete', `Request auto-approved in <100ms`, 'allow');
+  }
+}
+
+async function scenarioEscalation() {
+  registerParticipant('compliance-bot', 'quality', 'agent', { role: 'Monitors compliance' });
+  registerParticipant('michael', 'quality', 'human', { role: 'QA Analyst' });
+  registerParticipant('tom', 'quality', 'human', { role: 'Manager' });
+  renderParticipants();
+
+  await delay(500);
+  log('a2h.ask', 'compliance-bot → michael: violation detected');
+  addWireMessage('human_ask');
+
+  await delay(300);
+  const req = createRequest('quality/compliance-bot', 'quality/michael',
+    'Agent James offered 30% discount (policy max: 15%). What action?', 'choice',
+    { options: [
+        { label: 'Void Discount', value: 'void' },
+        { label: 'Approve Exception', value: 'exception' },
+        { label: 'Escalate to Manager', value: 'escalate' },
+      ],
+      context: { agent_name: 'James', discount_offered: 30, max_allowed: 15, customer: 'StartupXYZ' },
+      priority: 'high', deadline: '15 minutes' });
+  renderRequest(req);
+  log('a2h.pending', `Sent to michael with 15min deadline`, 'allow');
+  log('a2h.escalation', `Chain: michael(15min) → tom(30min)`, '');
+
+  // Simulate escalation after 5 seconds
+  await delay(5000);
+  if (req.status === 'pending') {
+    req.status = 'escalated';
+    log('a2h.escalated', `michael didn't respond in time → escalating to tom`, 'deny');
+    addWireMessage('ESCALATE', false);
+
+    const card = document.getElementById(`req-${req.id}`);
+    if (card) card.style.opacity = '0.3';
+
+    await delay(500);
+    const req2 = createRequest('quality/compliance-bot', 'quality/tom',
+      '[ESCALATED] Agent James offered 30% discount (policy max: 15%)', 'choice',
+      { ...req, priority: 'critical', deadline: '30 minutes',
+        options: req.options });
+    renderRequest(req2);
+    log('a2h.pending', `Escalated to tom with critical priority`, 'allow');
+  }
+}
+
+async function scenarioNotification() {
+  registerParticipant('dashboard-reporter', 'ops', 'agent', { role: 'Generates KPI reports' });
+  registerParticipant('tom', 'ops', 'human', { role: 'Center Manager', channels: ['dashboard', 'slack', 'email'] });
+  registerParticipants();
+
+  await delay(500);
+  log('a2h.notify', 'dashboard-reporter → tom: daily summary');
+  addWireMessage('notify');
+
+  await delay(300);
+  renderNotification('Daily summary: 240 calls handled, FCR 78%, CSAT 4.2, 3 escalations resolved. Agent of the day: Aisha Patel.', 'success');
+  log('a2h.delivered', 'Notification delivered to dashboard + slack + email', 'allow');
+
+  await delay(1000);
+  log('a2h.notify', 'dashboard-reporter → tom: anomaly alert');
+  addWireMessage('notify');
+
+  await delay(300);
+  renderNotification('⚠️ ALERT: CSAT dropped 0.8 points in last 2 hours. Correlated with billing system outage. 45% of calls billing-related.', 'warning');
+  log('a2h.delivered', 'Alert delivered to ALL channels (critical priority)', 'deny');
+}
+
+function renderParticipants() {
+  // Already defined above — just re-render
+  const agentsEl = document.getElementById('agents');
+  const humansEl = document.getElementById('humans');
+  agentsEl.innerHTML = '';
+  humansEl.innerHTML = '';
+  for (const p of Object.values(state.participants)) {
+    const badge = p.type === 'human' ? '<span class="badge badge-human">human</span>' : '<span class="badge badge-agent">agent</span>';
+    const verified = p.verified ? '<span class="badge badge-verified">✓</span>' : '';
+    const stateB = p.type === 'human' && p.state ? `<span class="badge badge-state">${p.state}</span>` : '';
+    const html = `<div class="participant"><div class="name">${p.name} ${badge} ${verified} ${stateB}</div><div class="role">${p.role || p.pid}</div></div>`;
+    if (p.type === 'agent') agentsEl.innerHTML += html;
+    else humansEl.innerHTML += html;
+  }
+}
+
+async function scenarioFull() {
+  // Register all participants
+  registerParticipant('sales-agent', 'sales', 'agent', { role: 'Qualifies leads' });
+  registerParticipant('support-bot', 'support', 'agent', { role: 'Triages tickets' });
+  registerParticipant('sarah', 'sales', 'human', { role: 'VP Sales', channels: ['dashboard', 'slack'],
+    delegationRules: [{ name: 'auto_small', responseType: 'approval',
+      contextConditions: { deal_value: { lt: 10000 } },
+      autoResponse: { approved: true, reason: 'Auto: under $10K' } }] });
+  registerParticipant('david', 'finance', 'human', { role: 'CFO', channels: ['dashboard', 'slack', 'email'] });
+  renderParticipants();
+  log('register', 'Registered 2 agents + 2 humans across sales, support, finance');
+
+  // Step 1: Small deal auto-delegated
+  await delay(800);
+  log('step', '── Step 1: Small deal ($5K) — auto-delegation ──');
+  addWireMessage('human_ask');
+  const req1 = createRequest('sales/sales-agent', 'sales/sarah',
+    'Approve $5K deal with SmallCorp?', 'approval',
+    { context: { deal_value: 5000 }, priority: 'low' });
+  const auto = checkDelegation('sales/sarah', req1);
+  if (auto) {
+    req1.status = 'auto_delegated';
+    req1.response = { ...auto, channel: 'auto_delegation' };
+    log('a2h.auto_delegated', '$5K < $10K threshold → auto-approved', 'auto');
+    addWireMessage('AUTO ✓', true);
+    renderNotification('✅ SmallCorp $5K auto-approved (rule: under $10K)', 'success');
+  }
+
+  // Step 2: Large deal needs human
+  await delay(1500);
+  log('step', '── Step 2: Large deal ($2.5M) — needs human approval ──');
+  addWireMessage('human_ask');
+  const req2 = createRequest('sales/sales-agent', 'sales/sarah',
+    'Approve the MegaInc deal at $2.5M?', 'approval',
+    { context: { deal_value: 2500000, bant_score: 87, risk: 'medium' }, priority: 'high', deadline: '4 hours' });
+  renderRequest(req2);
+  log('a2h.pending', '$2.5M > $10K threshold → requires sarah\'s decision', 'allow');
+
+  // Step 3: Notification
+  await delay(2000);
+  log('step', '── Step 3: Status notification to CFO ──');
+  addWireMessage('notify');
+  renderNotification('📊 Deal pipeline: 1 auto-approved ($5K), 1 pending approval ($2.5M MegaInc)', 'info');
+  log('a2h.notify', 'Status update sent to david (finance)', 'allow');
+}
+
+// Start with approval scenario
+window.onload = () => runScenario('approval');
+</script>
+</body>
+</html>

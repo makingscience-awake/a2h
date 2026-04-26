@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A2H Demo — Call Center</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0d1117;color:#c9d1d9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+.header{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;border-bottom:1px solid #21262d}
+.header h1{font-size:18px;color:#f0f6fc}
+.header h1 span{color:#8b949e;font-weight:400;font-size:13px}
+.stats{display:flex;gap:16px}
+.stat{text-align:center}
+.stat .n{font-size:20px;font-weight:800}
+.stat .l{font-size:9px;color:#484f58;text-transform:uppercase;letter-spacing:1px}
+.stat-calls .n{color:#58a6ff}
+.stat-wait .n{color:#e3b341}
+.stat-csat .n{color:#3fb950}
+
+.main{display:grid;grid-template-columns:220px 1fr 300px;gap:0;height:calc(100vh - 50px)}
+
+/* CSR Panel */
+.csr-panel{background:#161b22;border-right:1px solid #21262d;padding:10px;overflow-y:auto}
+.csr-panel h3{font-size:11px;color:#484f58;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+.csr{background:#21262d;border:1px solid #30363d;border-radius:8px;padding:8px 10px;margin:4px 0;font-size:11px;cursor:pointer;transition:all 0.15s}
+.csr:hover{border-color:#58a6ff}
+.csr .name{font-weight:700;color:#f0f6fc;font-size:12px}
+.csr .skill{color:#8b949e;font-size:10px}
+.csr .state-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+.dot-available{background:#3fb950}
+.dot-in_call{background:#f0883e}
+.dot-break{background:#e3b341}
+.dot-offline{background:#484f58}
+.csr-metrics{display:flex;gap:8px;margin-top:4px;font-size:9px;color:#484f58}
+
+/* Center: Call Queue + Active Calls */
+.center{padding:10px;overflow-y:auto}
+.section-title{font-size:11px;color:#484f58;text-transform:uppercase;letter-spacing:1px;margin:12px 0 6px;display:flex;align-items:center;gap:6px}
+.section-title .count{background:#30363d;color:#c9d1d9;padding:1px 6px;border-radius:10px;font-size:10px}
+
+.call-card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:10px;margin:4px 0;font-size:11px;animation:fadeIn 0.3s}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.call-card .customer{font-weight:700;color:#f0f6fc;font-size:12px}
+.call-card .issue{color:#8b949e;margin:2px 0}
+.call-card .tier{display:inline-block;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:600}
+.tier-premium{background:#2a1f33;color:#bc8cff}
+.tier-standard{background:#21262d;color:#8b949e}
+.tier-enterprise{background:#2a2517;color:#e3b341}
+.call-card .sentiment{margin-top:4px}
+.sentiment-bar{height:4px;border-radius:2px;background:#30363d;overflow:hidden;margin-top:2px}
+.sentiment-fill{height:100%;border-radius:2px;transition:width 0.5s}
+
+/* A2H Request in center */
+.a2h-request{background:#161b22;border:2px solid #8957e5;border-radius:10px;padding:12px;margin:6px 0;animation:fadeIn 0.3s}
+.a2h-request .from{font-size:10px;color:#3fb950}
+.a2h-request .q{font-size:12px;color:#f0f6fc;font-weight:600;margin:4px 0}
+.a2h-request .ctx{background:#0d1117;border-radius:6px;padding:6px 8px;margin:4px 0;font-size:10px;color:#8b949e}
+.a2h-request .actions{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+.btn{padding:5px 12px;border-radius:5px;border:none;font-size:10px;font-weight:600;cursor:pointer}
+.btn-primary{background:#238636;color:#fff}
+.btn-danger{background:#da3633;color:#fff}
+.btn-blue{background:#1f6feb;color:#fff}
+.btn-ghost{background:#21262d;color:#c9d1d9;border:1px solid #30363d}
+.btn:hover{opacity:0.85}
+
+.resolved{opacity:0.4;border-color:#238636}
+.resolved .actions{display:none}
+.resolved::after{content:'✓ Resolved';color:#3fb950;font-size:10px;font-weight:600}
+
+/* Right: Agent Activity + Log */
+.right-panel{background:#161b22;border-left:1px solid #21262d;padding:10px;overflow-y:auto;display:flex;flex-direction:column}
+.right-panel h3{font-size:11px;color:#484f58;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+.agent-card{background:#1f2a22;border:1px solid #3fb950;border-radius:6px;padding:6px 8px;margin:3px 0;font-size:10px}
+.agent-card .aname{color:#3fb950;font-weight:600;font-size:11px}
+.agent-card .aaction{color:#8b949e}
+
+.log{flex:1;background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:6px;margin-top:8px;overflow-y:auto;font-family:'SF Mono',monospace;font-size:9px}
+.log-e{padding:1px 0;color:#484f58;border-bottom:1px solid #161b22}
+.log-e .t{color:#30363d}
+.log-e .a{font-weight:600}
+.a-a2h{color:#bc8cff}
+.a-a2a{color:#56d4c4}
+.a-route{color:#58a6ff}
+.a-alert{color:#f85149}
+.a-ok{color:#3fb950}
+.a-auto{color:#e3b341}
+
+/* Timer */
+.timer{color:#e3b341;font-size:10px;font-weight:600;animation:blink 1s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.5}}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Call Center <span>— A2H + A2A Live Demo</span></h1>
+  <div class="stats">
+    <div class="stat stat-calls"><div class="n" id="s-calls">0</div><div class="l">Calls Today</div></div>
+    <div class="stat stat-wait"><div class="n" id="s-wait">0</div><div class="l">In Queue</div></div>
+    <div class="stat stat-csat"><div class="n" id="s-csat">4.2</div><div class="l">CSAT</div></div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="csr-panel">
+    <h3>CSR Team</h3>
+    <div id="csrs"></div>
+    <h3 style="margin-top:16px">Team Lead</h3>
+    <div id="leads"></div>
+  </div>
+
+  <div class="center">
+    <div class="section-title">Incoming Queue <span class="count" id="q-count">0</span></div>
+    <div id="queue"></div>
+    <div class="section-title">Active Calls <span class="count" id="active-count">0</span></div>
+    <div id="active"></div>
+    <div class="section-title">A2H Requests <span class="count" id="a2h-count">0</span></div>
+    <div id="a2h-requests"></div>
+  </div>
+
+  <div class="right-panel">
+    <h3>AI Agents</h3>
+    <div id="agents"></div>
+    <h3 style="margin-top:12px">Event Log</h3>
+    <div class="log" id="log"></div>
+  </div>
+</div>
+
+<script>
+// State
+const csrs = [
+  {name:'Maria',skill:'billing',state:'available',calls:0,csat:4.3},
+  {name:'Carlos',skill:'technical',state:'available',calls:0,csat:4.1},
+  {name:'Aisha',skill:'general',state:'available',calls:0,csat:4.5},
+  {name:'James',skill:'sales',state:'in_call',calls:3,csat:3.9},
+  {name:'Sofia',skill:'retention',state:'break',calls:2,csat:4.4},
+  {name:'David',skill:'enterprise',state:'available',calls:1,csat:4.2},
+];
+const lead = {name:'Rachel',role:'Team Lead',state:'available'};
+const agents = [
+  {name:'Call Router',action:'Monitoring queue...'},
+  {name:'Sentiment Monitor',action:'Scanning active calls...'},
+  {name:'Knowledge Assistant',action:'Idle'},
+  {name:'Escalation Manager',action:'No pending escalations'},
+];
+
+let callCounter = 0;
+let a2hCounter = 0;
+let queueCalls = [];
+let activeCalls = [];
+
+const customers = [
+  {name:'Jane Smith',tier:'premium',issue:'Charged twice for subscription',skill:'billing',sentiment:0.3},
+  {name:'Bob Lee',tier:'standard',issue:'Cannot access dashboard',skill:'technical',sentiment:0.7},
+  {name:'Acme Corp',tier:'enterprise',issue:'Contract renewal pricing',skill:'enterprise',sentiment:0.5},
+  {name:'Lisa Park',tier:'premium',issue:'Wants to cancel account',skill:'retention',sentiment:0.2},
+  {name:'TechStart Inc',tier:'standard',issue:'API integration help',skill:'technical',sentiment:0.8},
+  {name:'GlobalCo',tier:'enterprise',issue:'SLA violation complaint',skill:'enterprise',sentiment:0.15},
+  {name:'Sam Wilson',tier:'standard',issue:'Billing cycle question',skill:'billing',sentiment:0.9},
+  {name:'MegaCorp',tier:'enterprise',issue:'Bulk license discount request',skill:'sales',sentiment:0.6},
+];
+
+function log(action, detail, cls='') {
+  const t = new Date().toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const el = document.getElementById('log');
+  el.innerHTML += `<div class="log-e"><span class="t">${t}</span> <span class="a a-${cls}">[${action}]</span> ${detail}</div>`;
+  el.scrollTop = el.scrollHeight;
+}
+
+function renderCSRs() {
+  const el = document.getElementById('csrs');
+  el.innerHTML = csrs.map(c => `
+    <div class="csr">
+      <div><span class="state-dot dot-${c.state}"></span><span class="name">${c.name}</span></div>
+      <div class="skill">${c.skill} specialist · ${c.state}</div>
+      <div class="csr-metrics"><span>Calls: ${c.calls}</span><span>CSAT: ${c.csat}</span></div>
+    </div>
+  `).join('');
+  document.getElementById('leads').innerHTML = `
+    <div class="csr">
+      <div><span class="state-dot dot-${lead.state}"></span><span class="name">${lead.name}</span></div>
+      <div class="skill">${lead.role} · ${lead.state}</div>
+    </div>`;
+}
+
+function renderAgents() {
+  document.getElementById('agents').innerHTML = agents.map(a => `
+    <div class="agent-card"><div class="aname">🤖 ${a.name}</div><div class="aaction">${a.action}</div></div>
+  `).join('');
+}
+
+function sentimentColor(v) {
+  if (v < 0.3) return '#f85149';
+  if (v < 0.5) return '#e3b341';
+  return '#3fb950';
+}
+
+function renderQueue() {
+  document.getElementById('queue').innerHTML = queueCalls.map(c => `
+    <div class="call-card">
+      <span class="tier tier-${c.tier}">${c.tier}</span>
+      <span class="customer">${c.name}</span>
+      <div class="issue">${c.issue}</div>
+      <div class="timer">⏳ Waiting ${c.wait}s — needs ${c.skill}</div>
+    </div>
+  `).join('');
+  document.getElementById('q-count').textContent = queueCalls.length;
+}
+
+function renderActive() {
+  document.getElementById('active').innerHTML = activeCalls.map(c => `
+    <div class="call-card ${c.resolved?'resolved':''}">
+      <span class="tier tier-${c.tier}">${c.tier}</span>
+      <span class="customer">${c.name}</span> → <strong>${c.csr}</strong>
+      <div class="issue">${c.issue}</div>
+      <div class="sentiment">Sentiment:
+        <div class="sentiment-bar"><div class="sentiment-fill" style="width:${c.sentiment*100}%;background:${sentimentColor(c.sentiment)}"></div></div>
+      </div>
+    </div>
+  `).join('');
+  document.getElementById('active-count').textContent = activeCalls.filter(c=>!c.resolved).length;
+}
+
+function addA2HRequest(from, to, question, type, options, context, priority) {
+  a2hCounter++;
+  const id = `a2h-${a2hCounter}`;
+  let actionsHtml = '';
+  if (type === 'approval') {
+    actionsHtml = `<button class="btn btn-primary" onclick="resolveA2H('${id}','approved')">✅ Approve</button>
+                   <button class="btn btn-danger" onclick="resolveA2H('${id}','rejected')">❌ Reject</button>`;
+  } else if (type === 'choice') {
+    actionsHtml = options.map(o => `<button class="btn btn-blue" onclick="resolveA2H('${id}','${o.value}')">${o.label}</button>`).join('');
+  } else {
+    actionsHtml = `<button class="btn btn-primary" onclick="resolveA2H('${id}','ok')">Acknowledge</button>`;
+  }
+
+  let ctxHtml = '';
+  for (const [k,v] of Object.entries(context||{})) {
+    ctxHtml += `<div><strong>${k}:</strong> ${v}</div>`;
+  }
+
+  document.getElementById('a2h-requests').innerHTML += `
+    <div class="a2h-request" id="${id}">
+      <div class="from">🤖 ${from} → 👤 ${to}</div>
+      <div class="q">${question}</div>
+      ${ctxHtml ? `<div class="ctx">${ctxHtml}</div>` : ''}
+      <div style="font-size:9px;color:${priority==='critical'?'#f85149':'#e3b341'};margin:4px 0">Priority: ${priority}</div>
+      <div class="actions">${actionsHtml}</div>
+    </div>`;
+  document.getElementById('a2h-count').textContent = a2hCounter;
+  log('a2h.ask', `${from} → ${to}: "${question.substring(0,50)}..."`, 'a2h');
+}
+
+function resolveA2H(id, value) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.style.borderColor = '#238636';
+    el.style.opacity = '0.5';
+    el.querySelector('.actions').innerHTML = `<span style="color:#3fb950;font-weight:600">✓ ${value}</span>`;
+  }
+  log('a2h.respond', `Decision: ${value}`, 'ok');
+}
+
+// ─── Simulation ───
+
+function incomingCall() {
+  const c = customers[Math.floor(Math.random()*customers.length)];
+  callCounter++;
+  document.getElementById('s-calls').textContent = callCounter;
+  const call = {...c, wait: 0, id: callCounter};
+  queueCalls.push(call);
+  log('route', `Incoming call #${callCounter}: ${c.name} (${c.tier}) — ${c.issue}`, 'route');
+  agents[0].action = `Routing call #${callCounter}...`;
+  renderAgents();
+  renderQueue();
+
+  // Route after 2s
+  setTimeout(() => routeCall(call), 2000);
+}
+
+function routeCall(call) {
+  const available = csrs.filter(c => c.state === 'available' && c.skill === call.skill);
+  let csr = available[0];
+  if (!csr) csr = csrs.find(c => c.state === 'available');
+  if (!csr) {
+    call.wait += 5;
+    log('route', `No CSR available for ${call.name} — queued`, 'alert');
+    // Escalate to Rachel
+    addA2HRequest('Call Router', 'Rachel',
+      `Queue overflow: ${call.name} waiting ${call.wait}s, no ${call.skill} CSR available`,
+      'choice',
+      [{label:'Take Call',value:'take'},{label:'Reassign',value:'reassign'},{label:'Hold',value:'hold'}],
+      {customer:call.name, tier:call.tier, wait:`${call.wait}s`, skill_needed:call.skill},
+      'high');
+    return;
+  }
+
+  csr.state = 'in_call';
+  csr.calls++;
+  queueCalls = queueCalls.filter(c => c.id !== call.id);
+  activeCalls.push({...call, csr: csr.name, startTime: Date.now()});
+  log('route', `Routed ${call.name} → ${csr.name} (${csr.skill})`, 'ok');
+  agents[0].action = `Routed #${call.id} → ${csr.name}`;
+  renderCSRs();
+  renderQueue();
+  renderActive();
+
+  // Sentiment check
+  if (call.sentiment < 0.3) {
+    setTimeout(() => {
+      agents[1].action = `⚠️ Anger detected on #${call.id}!`;
+      renderAgents();
+      log('a2a', `Sentiment Monitor → Escalation Manager: anger on #${call.id}`, 'a2a');
+
+      setTimeout(() => {
+        addA2HRequest('Sentiment Monitor', 'Rachel',
+          `Customer ${call.name} anger spike on call with ${csr.name}. Sentiment: ${call.sentiment}`,
+          'choice',
+          [{label:'Take Over',value:'takeover'},{label:'Coach CSR',value:'coach'},{label:'Monitor',value:'monitor'}],
+          {call_id:call.id, customer:call.name, csr:csr.name, sentiment:call.sentiment, tier:call.tier},
+          'critical');
+      }, 1000);
+    }, 3000);
+  }
+
+  // Resolve call after 8-15s
+  const duration = 8000 + Math.random() * 7000;
+  setTimeout(() => resolveCall(call, csr), duration);
+}
+
+function resolveCall(call, csr) {
+  csr.state = 'available';
+  const ac = activeCalls.find(c => c.id === call.id);
+  if (ac) ac.resolved = true;
+  log('route', `Call #${call.id} resolved. ${csr.name} available.`, 'ok');
+  agents[2].action = `Generating notes for #${call.id}...`;
+  renderCSRs();
+  renderActive();
+  renderAgents();
+
+  // After-call notification
+  setTimeout(() => {
+    addA2HRequest('After-Call Automator', csr.name,
+      `Call #${call.id} with ${call.name}: ${call.issue}. Auto-generated summary ready for review.`,
+      'approval',
+      null,
+      {call_id:call.id, customer:call.name, category:call.skill, resolution:'resolved', handle_time:`${Math.floor(8+Math.random()*7)}min`},
+      'low');
+    agents[2].action = 'Idle';
+    renderAgents();
+  }, 2000);
+}
+
+// Update queue wait times
+setInterval(() => {
+  queueCalls.forEach(c => c.wait += 1);
+  if (queueCalls.length) renderQueue();
+}, 1000);
+
+// Incoming calls every 6-12s
+function scheduleCall() {
+  const delay = 6000 + Math.random() * 6000;
+  setTimeout(() => { incomingCall(); scheduleCall(); }, delay);
+}
+
+// Break rotation
+setTimeout(() => {
+  const sofia = csrs.find(c => c.name === 'Sofia');
+  if (sofia) { sofia.state = 'available'; renderCSRs(); log('state','Sofia back from break','ok'); }
+}, 8000);
+
+// Init
+renderCSRs();
+renderAgents();
+incomingCall();
+setTimeout(incomingCall, 3000);
+scheduleCall();
+</script>
+</body>
+</html>

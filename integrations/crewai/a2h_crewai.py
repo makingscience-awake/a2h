@@ -35,8 +35,8 @@ except ImportError:
 def build_a2h_tools(
     gateway,
     from_participant: str | None = None,
-    from_name: str = "",
-    from_namespace: str = "default",
+    from_participant: str = "default/agent",
+    ,
 ) -> list:
     """Build CrewAI BaseTool instances for A2H operations.
 
