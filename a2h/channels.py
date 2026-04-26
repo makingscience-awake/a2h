@@ -20,7 +20,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
-from .models import Interaction, Notification
+from .models import AgentIdentity, Interaction, Notification
 
 logger = logging.getLogger(__name__)
 
@@ -121,40 +121,8 @@ class ResponseVerification:
         }
 
 
-# ---------------------------------------------------------------------------
-# Agent identity (A2H spec — enriched "from" field)
-# ---------------------------------------------------------------------------
-
-@dataclass
-class AgentIdentity:
-    """How an agent presents itself to humans through channels."""
-    name: str
-    namespace: str = "default"
-    display_name: str = ""
-    description: str = ""
-    deployed_by: str = ""
-    platform_name: str = ""
-    platform_url: str = ""
-    verified: bool = False
-
-    def to_dict(self) -> dict[str, Any]:
-        d: dict[str, Any] = {
-            "name": self.name, "namespace": self.namespace,
-            "participant_type": "agent",
-        }
-        if self.display_name:
-            d["display_name"] = self.display_name
-        if self.description:
-            d["description"] = self.description
-        if self.deployed_by:
-            d["deployed_by"] = self.deployed_by
-        if self.platform_name:
-            d["platform"] = {
-                "name": self.platform_name,
-                "url": self.platform_url,
-                "verified": self.verified,
-            }
-        return d
+# AgentIdentity is now defined in models.py; re-exported here for backward compat.
+# from .models import AgentIdentity  (imported above)
 
 
 # ---------------------------------------------------------------------------

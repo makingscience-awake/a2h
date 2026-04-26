@@ -49,7 +49,15 @@ class ParticipantUnavailable(A2HError):
 
 class DuplicateParticipant(A2HError):
     code = "A2H_DUPLICATE_PARTICIPANT"
-    suggestion = "A participant with this namespace/name is already registered."
+    suggestion = "A participant with this namespace/name is already registered. Use allow_replace=True to overwrite."
+
+class InvalidParticipantID(A2HError):
+    code = "A2H_INVALID_PARTICIPANT_ID"
+    suggestion = "Name and namespace must be 1-64 alphanumeric characters (plus .-_), starting with a letter or digit."
+
+class SenderNotRegistered(A2HError):
+    code = "A2H_SENDER_NOT_REGISTERED"
+    suggestion = "Register the sending agent with gateway.register() before sending requests."
 
 
 # ---------------------------------------------------------------------------
@@ -109,6 +117,26 @@ class RateLimitExceeded(A2HError):
 class ExecutionMismatch(A2HError):
     code = "A2H_EXECUTION_MISMATCH"
     suggestion = "The agent's actual operation doesn't match what the human approved. Execution blocked."
+
+
+# ---------------------------------------------------------------------------
+# Registry errors
+# ---------------------------------------------------------------------------
+
+class RegistryError(A2HError):
+    code = "A2H_REGISTRY_ERROR"
+    suggestion = "Check the registry configuration and participant declarations."
+
+class RegistryLoadError(RegistryError):
+    code = "A2H_REGISTRY_LOAD_ERROR"
+    suggestion = "Check the YAML file for syntax errors and required fields (name, namespace)."
+
+class UnauthorizedParticipant(RegistryError):
+    code = "A2H_UNAUTHORIZED_PARTICIPANT"
+    suggestion = (
+        "In strict mode, only participants declared in participants.yaml are allowed. "
+        "Add the participant to the file or switch to permissive mode."
+    )
 
 
 # ---------------------------------------------------------------------------

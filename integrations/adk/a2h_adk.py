@@ -31,14 +31,32 @@ except ImportError:
     ADK_AVAILABLE = False
 
 
-def build_a2h_tools(gateway, from_name: str = "", from_namespace: str = "default") -> list:
+def build_a2h_tools(
+    gateway,
+    from_participant: str | None = None,
+    from_name: str = "",
+    from_namespace: str = "default",
+) -> list:
     """Build ADK FunctionTool instances for A2H operations.
+
+    Args:
+        gateway: A2H Gateway instance.
+        from_participant: Registered sender PID ("namespace/name"). Preferred.
+        from_name: (Deprecated) Sender agent name.
+        from_namespace: (Deprecated) Sender namespace.
 
     Returns tools for: human_ask, human_check, human_notify.
     """
     if not ADK_AVAILABLE:
         logger.warning("google-adk not installed — A2H ADK tools unavailable")
         return []
+
+    _sender_kwargs: dict[str, Any] = {}
+    if from_participant:
+        _sender_kwargs["from_participant"] = from_participant
+    elif from_name:
+        _sender_kwargs["from_name"] = from_name
+        _sender_kwargs["from_namespace"] = from_namespace
 
     async def human_ask(
         name: str,
@@ -70,8 +88,7 @@ def build_a2h_tools(gateway, from_name: str = "", from_namespace: str = "default
             options=parsed_options,
             context=parsed_context,
             priority=priority,
-            from_name=from_name,
-            from_namespace=from_namespace,
+            **_sender_kwargs,
         )
 
         if req.status.value == "auto_delegated":
@@ -121,8 +138,7 @@ def build_a2h_tools(gateway, from_name: str = "", from_namespace: str = "default
             message=message,
             severity=severity,
             priority=priority,
-            from_name=from_name,
-            from_namespace=from_namespace,
+            **_sender_kwargs,
         )
         return {"delivered": True, "notification_id": notif.id}
 

@@ -31,11 +31,30 @@ except ImportError:
     LANGCHAIN_AVAILABLE = False
 
 
-def build_a2h_tools(gateway, from_name: str = "", from_namespace: str = "default") -> list:
-    """Build LangChain StructuredTool instances for A2H operations."""
+def build_a2h_tools(
+    gateway,
+    from_participant: str | None = None,
+    from_name: str = "",
+    from_namespace: str = "default",
+) -> list:
+    """Build LangChain StructuredTool instances for A2H operations.
+
+    Args:
+        gateway: A2H Gateway instance.
+        from_participant: Registered sender PID ("namespace/name"). Preferred.
+        from_name: (Deprecated) Sender agent name.
+        from_namespace: (Deprecated) Sender namespace.
+    """
     if not LANGCHAIN_AVAILABLE:
         logger.warning("langchain-core not installed — A2H LangChain tools unavailable")
         return []
+
+    _sender_kwargs: dict[str, Any] = {}
+    if from_participant:
+        _sender_kwargs["from_participant"] = from_participant
+    elif from_name:
+        _sender_kwargs["from_name"] = from_name
+        _sender_kwargs["from_namespace"] = from_namespace
 
     class HumanAskInput(BaseModel):
         name: str = Field(description="Human's name (e.g., 'sarah')")
@@ -82,8 +101,7 @@ def build_a2h_tools(gateway, from_name: str = "", from_namespace: str = "default
             options=options,
             context=context,
             priority=priority,
-            from_name=from_name,
-            from_namespace=from_namespace,
+            **_sender_kwargs,
         )
 
         if req.status.value == "auto_delegated":
@@ -121,8 +139,7 @@ def build_a2h_tools(gateway, from_name: str = "", from_namespace: str = "default
             message=message,
             severity=severity,
             priority=priority,
-            from_name=from_name,
-            from_namespace=from_namespace,
+            **_sender_kwargs,
         )
         return {"delivered": True, "notification_id": notif.id}
 

@@ -6,11 +6,14 @@ No framework dependencies. Pure Python dataclasses.
 
 from __future__ import annotations
 
+import re
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
+
+_PID_COMPONENT_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$")
 
 
 # ---------------------------------------------------------------------------
@@ -44,8 +47,52 @@ class Priority(str, Enum):
 
 
 # ---------------------------------------------------------------------------
+# Agent identity (A2H spec — enriched "from" field)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class AgentIdentity:
+    """How an agent presents itself to humans through channels."""
+    name: str
+    namespace: str = "default"
+    display_name: str = ""
+    description: str = ""
+    deployed_by: str = ""
+    platform_name: str = ""
+    platform_url: str = ""
+    verified: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {
+            "name": self.name, "namespace": self.namespace,
+            "participant_type": "agent",
+        }
+        if self.display_name:
+            d["display_name"] = self.display_name
+        if self.description:
+            d["description"] = self.description
+        if self.deployed_by:
+            d["deployed_by"] = self.deployed_by
+        if self.platform_name:
+            d["platform"] = {
+                "name": self.platform_name,
+                "url": self.platform_url,
+                "verified": self.verified,
+            }
+        return d
+
+
+# ---------------------------------------------------------------------------
 # Participant
 # ---------------------------------------------------------------------------
+
+def _validate_pid_component(value: str, field_name: str) -> None:
+    if not _PID_COMPONENT_RE.match(value):
+        raise ValueError(
+            f"Invalid {field_name} '{value}': must be 1-64 characters, "
+            "start with alphanumeric, and contain only [a-zA-Z0-9._-]"
+        )
+
 
 @dataclass
 class StateRule:
@@ -61,6 +108,9 @@ class Participant:
 
     The protocol treats both uniformly — the ``participant_type`` field
     and ``capabilities`` determine behavior, not a separate class hierarchy.
+
+    ``name`` and ``namespace`` are validated on creation and frozen
+    afterwards to prevent identity drift after registration.
     """
     name: str
     namespace: str = "default"
@@ -78,11 +128,34 @@ class Participant:
     current_state: str = "available"
     delegate: str | None = None
     delegation_rules: list[DelegationRule] = field(default_factory=list)
+    identity: AgentIdentity | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    trust_level: str = "runtime"
+
+    def __post_init__(self):
+        _validate_pid_component(self.name, "name")
+        _validate_pid_component(self.namespace, "namespace")
+        object.__setattr__(self, "_initialized", True)
+
+    def __setattr__(self, key: str, value: Any) -> None:
+        if key in ("name", "namespace") and getattr(self, "_initialized", False):
+            raise AttributeError(
+                f"Cannot modify '{key}' after creation — participant identity is frozen"
+            )
+        object.__setattr__(self, key, value)
 
     @property
     def pid(self) -> str:
         return f"{self.namespace}/{self.name}"
+
+    @property
+    def delegate_pid(self) -> str | None:
+        """Resolve delegate to a full PID (namespace/name)."""
+        if self.delegate is None:
+            return None
+        if "/" in self.delegate:
+            return self.delegate
+        return f"{self.namespace}/{self.delegate}"
 
     @property
     def accepts_requests(self) -> bool:
@@ -100,7 +173,7 @@ class Participant:
         if not rule or not rule.reroute_to:
             return None
         if rule.reroute_to == "delegate":
-            return self.delegate
+            return self.delegate_pid
         return rule.reroute_to
 
     def set_state(self, state: str) -> None:
@@ -115,6 +188,7 @@ class Participant:
             "description": self.description or f"{self.participant_type}: {self.name}",
             "protocol": "a2h/v1",
             "version": "1.0",
+            "trust_level": self.trust_level,
         }
         if self.participant_type == "human":
             card["a2h"] = {
@@ -126,6 +200,8 @@ class Participant:
                     "schedule": self.availability,
                 },
             }
+        if self.participant_type == "agent" and self.identity:
+            card["identity"] = self.identity.to_dict()
         return card
 
 

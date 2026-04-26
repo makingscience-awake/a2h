@@ -16,6 +16,7 @@ This is the main entry point for A2H operations::
 from __future__ import annotations
 
 import logging
+import warnings
 from datetime import datetime, timezone
 from typing import Any
 
@@ -33,6 +34,8 @@ from .models import (
 )
 from .store import InMemoryStore, Store
 from .channels import Channel, LogChannel
+from .errors import DuplicateParticipant, ParticipantNotFound, SenderNotRegistered
+from .registry import ParticipantRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -40,52 +43,80 @@ logger = logging.getLogger(__name__)
 class Gateway:
     """A2H Protocol Gateway.
 
-    Stateless protocol handler. Storage and delivery are pluggable
-    via ``Store`` and ``Channel`` implementations.
+    Stateless protocol handler. Storage, delivery, and participant
+    management are pluggable via ``Store``, ``Channel``, and
+    ``ParticipantRegistry`` implementations.
 
     Args:
         store: Storage backend (default: InMemoryStore)
         channels: Delivery channels (default: [LogChannel()])
+        registry: Pre-configured ParticipantRegistry instance.
+        participants_file: Path to a participants.yaml file to load.
+        registry_mode: Registry mode — "permissive" (default) or "strict".
     """
 
     def __init__(
         self,
         store: Store | None = None,
         channels: list[Channel] | None = None,
+        *,
+        registry: ParticipantRegistry | None = None,
+        participants_file: str | None = None,
+        registry_mode: str = "permissive",
     ):
         self._store: Store = store or InMemoryStore()
         self._channels: list[Channel] = channels or [LogChannel()]
-        self._participants: dict[str, Participant] = {}
+
+        if registry is not None and participants_file is not None:
+            raise ValueError("Cannot specify both 'registry' and 'participants_file'")
+
+        if registry is not None:
+            self._registry = registry
+        elif participants_file is not None:
+            self._registry = ParticipantRegistry(participants_file, mode=registry_mode)
+        else:
+            self._registry = ParticipantRegistry(mode=registry_mode)
+
+    @property
+    def registry(self) -> ParticipantRegistry:
+        return self._registry
 
     # ---- Participant management --------------------------------------------
 
-    def register(self, participant: Participant) -> str:
+    def register(self, participant: Participant, *, allow_replace: bool = False) -> str:
         """Register a participant (human or agent). Returns PID."""
-        pid = participant.pid
-        self._participants[pid] = participant
-        logger.info("A2H registered: %s (%s)", pid, participant.participant_type)
-        return pid
+        return self._registry.register(participant, allow_replace=allow_replace)
 
-    def unregister(self, pid: str) -> bool:
-        return self._participants.pop(pid, None) is not None
+    def unregister(self, pid: str, *, cascade: bool = False) -> bool:
+        """Remove a participant from the registry.
+
+        Args:
+            pid: The participant ID ("namespace/name").
+            cascade: If True, cancel pending interactions addressed to this
+                participant and clear delegate references pointing to them.
+        """
+        if cascade:
+            for interaction in self._store.list_pending(pid):
+                self._store.cancel(interaction.id, f"Participant {pid} unregistered")
+            for p in self._registry.list():
+                if p.delegate_pid == pid:
+                    p.delegate = None
+        return self._registry.unregister(pid)
 
     def get_participant(self, pid: str) -> Participant | None:
-        return self._participants.get(pid)
+        return self._registry.get(pid)
 
     def resolve(self, namespace: str, name: str) -> Participant | None:
-        return self._participants.get(f"{namespace}/{name}")
+        return self._registry.resolve(namespace, name)
 
     def list_participants(
         self,
         participant_type: str | None = None,
         namespace: str | None = None,
     ) -> list[Participant]:
-        results = list(self._participants.values())
-        if participant_type:
-            results = [p for p in results if p.participant_type == participant_type]
-        if namespace:
-            results = [p for p in results if p.namespace == namespace]
-        return results
+        return self._registry.list(
+            participant_type=participant_type, namespace=namespace
+        )
 
     def discover(self, **filters) -> list[dict]:
         """Return Participant Cards for discovery (per A2H spec)."""
@@ -105,8 +136,10 @@ class Gateway:
         deadline: str | None = None,
         sla_hours: float = 24.0,
         escalation: EscalationChain | None = None,
+        from_participant: str | None = None,
         from_name: str = "",
         from_namespace: str = "default",
+        strict: bool = True,
     ) -> Interaction:
         """Create an A2H request and deliver it.
 
@@ -120,17 +153,35 @@ class Gateway:
             deadline: ISO 8601 timestamp or duration ("4h", "1d")
             sla_hours: Fallback SLA if no deadline given
             escalation: Escalation chain definition
-            from_name: Sender agent name
-            from_namespace: Sender namespace
+            from_participant: Registered sender PID ("namespace/name"). Preferred.
+            from_name: (Deprecated) Sender agent name
+            from_namespace: (Deprecated) Sender namespace
+            strict: If True (default), raise ParticipantNotFound for unknown
+                targets. If False, return a CANCELLED interaction instead.
 
         Returns:
             The created Interaction with its ID and status.
+
+        Raises:
+            SenderNotRegistered: if a sender identity is claimed but not
+                registered.
+            ParticipantNotFound: if strict=True and the target is not
+                registered.
         """
+        # Resolve sender identity
+        from_name, from_namespace = self._resolve_sender(
+            from_participant, from_name, from_namespace
+        )
+
         # Resolve target
         to_ns, to_name = self._parse_pid(to)
         target = self.resolve(to_ns, to_name)
 
         if not target:
+            if strict:
+                raise ParticipantNotFound(
+                    f"Participant '{to}' not found", pid=to
+                )
             interaction = self._make_interaction(
                 from_name, from_namespace, to_name, to_ns,
                 question, response_type, options, context, priority, sla_hours, escalation,
@@ -144,12 +195,14 @@ class Gateway:
         if not target.accepts_requests and not target.should_queue:
             reroute = target.reroute_target
             if reroute:
-                rerouted = self.resolve(to_ns, reroute)
+                reroute_ns, reroute_name = self._parse_pid(reroute)
+                rerouted = self.resolve(reroute_ns, reroute_name)
                 if rerouted and rerouted.accepts_requests:
                     logger.info("A2H rerouting: %s (%s) → %s",
                                 target.name, target.current_state, rerouted.name)
                     target = rerouted
                     to_name = rerouted.name
+                    to_ns = rerouted.namespace
 
         # Build interaction
         parsed_options = [Option(**o) for o in (options or [])]
@@ -195,10 +248,14 @@ class Gateway:
         severity: str = "info",
         priority: str = "low",
         context: dict | None = None,
+        from_participant: str | None = None,
         from_name: str = "",
         from_namespace: str = "default",
     ) -> Notification:
         """Send a notification to a human. No response expected."""
+        from_name, from_namespace = self._resolve_sender(
+            from_participant, from_name, from_namespace
+        )
         to_ns, to_name = self._parse_pid(to)
 
         notification = Notification(
@@ -281,6 +338,44 @@ class Gateway:
         return self._store.get(interaction_id)
 
     # ---- Internal ----------------------------------------------------------
+
+    def _resolve_sender(
+        self,
+        from_participant: str | None,
+        from_name: str,
+        from_namespace: str,
+    ) -> tuple[str, str]:
+        """Resolve and verify the sender identity.
+
+        Returns (from_name, from_namespace) after validation.
+        """
+        if from_participant:
+            sender = self.get_participant(from_participant)
+            if not sender:
+                raise SenderNotRegistered(
+                    f"Sender '{from_participant}' is not registered",
+                    pid=from_participant,
+                )
+            return sender.name, sender.namespace
+
+        if from_name:
+            pid = f"{from_namespace}/{from_name}"
+            warnings.warn(
+                "from_name/from_namespace are deprecated, use "
+                f"from_participant='{pid}'",
+                DeprecationWarning,
+                stacklevel=3,
+            )
+            sender = self.get_participant(pid)
+            if not sender:
+                raise SenderNotRegistered(
+                    f"Sender '{pid}' is not registered",
+                    pid=pid,
+                )
+            return from_name, from_namespace
+
+        # Anonymous sender — allowed for backward compat
+        return from_name, from_namespace
 
     def _make_interaction(self, from_name, from_ns, to_name, to_ns,
                           question, response_type, options, context,

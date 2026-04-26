@@ -1,0 +1,78 @@
+# A2H Participant Registry
+# Source of truth for authorized humans and agents.
+
+version: "1"
+
+# Defaults applied to all participants unless overridden.
+defaults:
+  availability: business_hours
+  channels: [dashboard]
+
+participants:
+
+  # ---- Humans ----
+
+  - name: sarah
+    namespace: sales
+    type: human
+    role: VP Sales
+    channels: [dashboard, slack]
+    delegate: tom
+    delegation_rules:
+      - name: auto_approve_small_deals
+        match:
+          from_namespace: sales
+          response_type: approval
+          context_conditions:
+            deal_value: { lt: 10000 }
+        auto_response:
+          approved: true
+          reason: "Auto-approved: deal value under $10K"
+
+  - name: tom
+    namespace: sales
+    type: human
+    role: Sales Manager
+    channels: [dashboard, slack, email]
+    states:
+      available:
+        accepts_requests: true
+      busy:
+        accepts_requests: false
+        queue: true
+      away:
+        accepts_requests: false
+        reroute_to: delegate
+      offline:
+        accepts_requests: false
+        reroute_to: ops/oncall
+
+  - name: oncall
+    namespace: ops
+    type: human
+    role: On-call engineer
+    availability: "24x7"
+    channels: [dashboard, slack, sms]
+    metadata:
+      rotation: weekly
+
+  # ---- Agents ----
+
+  - name: pipeline-agent
+    namespace: sales
+    type: agent
+    description: Qualifies enterprise leads and requests deal approvals
+    identity:
+      display_name: Sales Pipeline Agent
+      deployed_by: sales-ops
+      platform_name: ForgeOS
+      platform_url: https://forgeos.acme.com
+      verified: true
+
+  - name: support-bot
+    namespace: support
+    type: agent
+    description: Triages support tickets and escalates to humans
+    identity:
+      display_name: Support Bot
+      deployed_by: engineering

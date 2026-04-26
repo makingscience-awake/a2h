@@ -27,6 +27,7 @@ Companion to Google A2A (agent-to-agent) and Anthropic MCP (agent-to-tool).
 """
 
 from .models import (
+    AgentIdentity,
     DelegationRule,
     EscalationChain,
     EscalationLevel,
@@ -39,9 +40,9 @@ from .models import (
     Status,
 )
 from .gateway import Gateway
+from .registry import ParticipantRegistry
 from .store import InMemoryStore, Store
 from .channels import (
-    AgentIdentity,
     Channel,
     ChannelCapability,
     DashboardChannel,
@@ -56,17 +57,23 @@ from .channels import (
 from .errors import (
     A2HError,
     ChannelDeliveryFailed,
+    DuplicateParticipant,
     ExecutionMismatch,
+    InvalidParticipantID,
     InvalidResponseType,
     NoSupportedChannel,
     ParticipantNotFound,
     ParticipantUnavailable,
     RateLimitExceeded,
+    RegistryError,
+    RegistryLoadError,
     RequestExpired,
     RequestNotFound,
     RequestNotPending,
+    SenderNotRegistered,
     SignatureInvalid,
     TrustLevelInsufficient,
+    UnauthorizedParticipant,
 )
 
 __version__ = "0.1.0"
@@ -74,17 +81,23 @@ __all__ = [
     # Errors
     "A2HError",
     "ChannelDeliveryFailed",
+    "DuplicateParticipant",
     "ExecutionMismatch",
+    "InvalidParticipantID",
     "InvalidResponseType",
     "NoSupportedChannel",
     "ParticipantNotFound",
     "ParticipantUnavailable",
     "RateLimitExceeded",
+    "RegistryError",
+    "RegistryLoadError",
     "RequestExpired",
     "RequestNotFound",
     "RequestNotPending",
+    "SenderNotRegistered",
     "SignatureInvalid",
     "TrustLevelInsufficient",
+    "UnauthorizedParticipant",
     #
     "AgentIdentity",
     "Channel",
@@ -101,6 +114,7 @@ __all__ = [
     "LogChannel",
     "Notification",
     "Participant",
+    "ParticipantRegistry",
     "Priority",
     "Response",
     "ResponseType",

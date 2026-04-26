@@ -32,11 +32,30 @@ except ImportError:
     CREWAI_AVAILABLE = False
 
 
-def build_a2h_tools(gateway, from_name: str = "", from_namespace: str = "default") -> list:
-    """Build CrewAI BaseTool instances for A2H operations."""
+def build_a2h_tools(
+    gateway,
+    from_participant: str | None = None,
+    from_name: str = "",
+    from_namespace: str = "default",
+) -> list:
+    """Build CrewAI BaseTool instances for A2H operations.
+
+    Args:
+        gateway: A2H Gateway instance.
+        from_participant: Registered sender PID ("namespace/name"). Preferred.
+        from_name: (Deprecated) Sender agent name.
+        from_namespace: (Deprecated) Sender namespace.
+    """
     if not CREWAI_AVAILABLE:
         logger.warning("crewai not installed — A2H CrewAI tools unavailable")
         return []
+
+    _sender_kwargs: dict[str, Any] = {}
+    if from_participant:
+        _sender_kwargs["from_participant"] = from_participant
+    elif from_name:
+        _sender_kwargs["from_name"] = from_name
+        _sender_kwargs["from_namespace"] = from_namespace
 
     class HumanAskTool(BaseTool):
         name: str = "human_ask"
@@ -70,8 +89,7 @@ def build_a2h_tools(gateway, from_name: str = "", from_namespace: str = "default
                     options=parsed_options,
                     context=parsed_context,
                     priority=priority,
-                    from_name=from_name,
-                    from_namespace=from_namespace,
+                    **_sender_kwargs,
                 ))
 
                 if req.status.value == "auto_delegated":
@@ -111,8 +129,7 @@ def build_a2h_tools(gateway, from_name: str = "", from_namespace: str = "default
                     message=message,
                     severity=severity,
                     priority=priority,
-                    from_name=from_name,
-                    from_namespace=from_namespace,
+                    **_sender_kwargs,
                 ))
                 return f"Notification sent: {notif.id}"
             except Exception as e:

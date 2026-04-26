@@ -49,6 +49,7 @@ def create_app(gateway):
         priority: str = "medium"
         deadline: str | None = None
         sla_hours: float = 24.0
+        from_participant: str | None = None
         from_name: str = ""
         from_namespace: str = "default"
 
@@ -65,6 +66,7 @@ def create_app(gateway):
         severity: str = "info"
         priority: str = "low"
         context: dict | None = None
+        from_participant: str | None = None
         from_name: str = ""
         from_namespace: str = "default"
 
@@ -72,18 +74,25 @@ def create_app(gateway):
 
     @app.post("/a2h/v1/requests", status_code=201)
     async def create_request(req: CreateRequest):
-        interaction = await gateway.ask(
-            to=req.to,
-            question=req.question,
-            response_type=req.response_type,
-            options=req.options,
-            context=req.context,
-            priority=req.priority,
-            deadline=req.deadline,
-            sla_hours=req.sla_hours,
-            from_name=req.from_name,
-            from_namespace=req.from_namespace,
-        )
+        from a2h.errors import ParticipantNotFound, SenderNotRegistered
+        try:
+            interaction = await gateway.ask(
+                to=req.to,
+                question=req.question,
+                response_type=req.response_type,
+                options=req.options,
+                context=req.context,
+                priority=req.priority,
+                deadline=req.deadline,
+                sla_hours=req.sla_hours,
+                from_participant=req.from_participant,
+                from_name=req.from_name,
+                from_namespace=req.from_namespace,
+            )
+        except ParticipantNotFound as e:
+            raise HTTPException(404, e.message)
+        except SenderNotRegistered as e:
+            raise HTTPException(403, e.message)
         return {
             "id": interaction.id,
             "status": interaction.status.value,
@@ -120,15 +129,20 @@ def create_app(gateway):
 
     @app.post("/a2h/v1/notifications", status_code=201)
     async def send_notification(req: NotifyRequest):
-        notification = await gateway.notify(
-            to=req.to,
-            message=req.message,
-            severity=req.severity,
-            priority=req.priority,
-            context=req.context,
-            from_name=req.from_name,
-            from_namespace=req.from_namespace,
-        )
+        from a2h.errors import SenderNotRegistered
+        try:
+            notification = await gateway.notify(
+                to=req.to,
+                message=req.message,
+                severity=req.severity,
+                priority=req.priority,
+                context=req.context,
+                from_participant=req.from_participant,
+                from_name=req.from_name,
+                from_namespace=req.from_namespace,
+            )
+        except SenderNotRegistered as e:
+            raise HTTPException(403, e.message)
         return {"id": notification.id, "delivered": True}
 
     @app.get("/.well-known/participants.json")
