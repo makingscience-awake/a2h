@@ -252,6 +252,10 @@ class Interaction:
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = ""
 
+    # Audit metadata (set by Gateway)
+    matched_rule: str | None = None
+    rerouted_from: str | None = None
+
     def __post_init__(self):
         if not self.deadline:
             self.deadline = (
@@ -442,3 +446,28 @@ class DelegationRule:
             if "eq" in cond and actual != cond["eq"]:
                 return False
         return True
+
+
+# ---------------------------------------------------------------------------
+# Audit event
+# ---------------------------------------------------------------------------
+
+@dataclass
+class AuditEvent:
+    """An immutable record of a state-changing operation in the A2H system."""
+    id: str = field(default_factory=lambda: f"evt_{uuid.uuid4().hex[:10]}")
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    event_type: str = ""
+    interaction_id: str = ""
+    actor: str = ""
+    details: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "timestamp": self.timestamp,
+            "event_type": self.event_type,
+            "interaction_id": self.interaction_id,
+            "actor": self.actor,
+            "details": self.details,
+        }

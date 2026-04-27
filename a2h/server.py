@@ -149,4 +149,32 @@ def create_app(gateway):
     async def discovery():
         return gateway.discover()
 
+    # ---- Audit endpoints ----
+
+    @app.get("/a2h/v1/audit/{interaction_id}")
+    async def audit_history(interaction_id: str):
+        if not gateway._audit:
+            raise HTTPException(404, "Audit log not configured")
+        events = gateway._audit.get_history(interaction_id)
+        return {"interaction_id": interaction_id, "events": [e.to_dict() for e in events]}
+
+    @app.get("/a2h/v1/audit")
+    async def audit_query(
+        participant: str | None = None,
+        event_type: str | None = None,
+        since: str | None = None,
+        until: str | None = None,
+        limit: int = 100,
+    ):
+        if not gateway._audit:
+            raise HTTPException(404, "Audit log not configured")
+        events = gateway._audit.query(
+            participant=participant,
+            event_type=event_type,
+            since=since,
+            until=until,
+            limit=limit,
+        )
+        return {"events": [e.to_dict() for e in events]}
+
     return app

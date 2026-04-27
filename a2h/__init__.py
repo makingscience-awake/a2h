@@ -28,6 +28,7 @@ Companion to Google A2A (agent-to-agent) and Anthropic MCP (agent-to-tool).
 
 from .models import (
     AgentIdentity,
+    AuditEvent,
     DelegationRule,
     EscalationChain,
     EscalationLevel,
@@ -39,6 +40,7 @@ from .models import (
     ResponseType,
     Status,
 )
+from .audit import AuditLog, InMemoryAuditLog
 from .gateway import Gateway
 from .registry import ParticipantRegistry
 from .store import InMemoryStore, Store
@@ -49,6 +51,8 @@ from .channels import (
     DASHBOARD_CAPABILITY,
     EMAIL_CAPABILITY,
     LogChannel,
+    MacDialogChannel,
+    MACOS_DIALOG_CAPABILITY,
     ResponseVerification,
     SLACK_CAPABILITY,
     SMS_CAPABILITY,
@@ -100,6 +104,8 @@ __all__ = [
     "UnauthorizedParticipant",
     #
     "AgentIdentity",
+    "AuditEvent",
+    "AuditLog",
     "Channel",
     "ChannelCapability",
     "DashboardChannel",
@@ -109,9 +115,12 @@ __all__ = [
     "EscalationChain",
     "EscalationLevel",
     "Gateway",
+    "InMemoryAuditLog",
     "InMemoryStore",
     "Interaction",
     "LogChannel",
+    "MacDialogChannel",
+    "MACOS_DIALOG_CAPABILITY",
     "Notification",
     "Participant",
     "ParticipantRegistry",

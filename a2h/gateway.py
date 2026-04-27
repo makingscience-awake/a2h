@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .models import (
+    AuditEvent,
     DelegationRule,
     EscalationChain,
     Interaction,
@@ -36,6 +37,7 @@ from .store import InMemoryStore, Store
 from .channels import Channel, LogChannel
 from .errors import DuplicateParticipant, ParticipantNotFound, SenderNotRegistered
 from .registry import ParticipantRegistry
+from .audit import AuditLog, compute_response_time
 
 logger = logging.getLogger(__name__)
 
@@ -63,9 +65,11 @@ class Gateway:
         registry: ParticipantRegistry | None = None,
         participants_file: str | None = None,
         registry_mode: str = "permissive",
+        audit_log: AuditLog | None = None,
     ):
         self._store: Store = store or InMemoryStore()
         self._channels: list[Channel] = channels or [LogChannel()]
+        self._audit: AuditLog | None = audit_log
 
         if registry is not None and participants_file is not None:
             raise ValueError("Cannot specify both 'registry' and 'participants_file'")
@@ -192,6 +196,7 @@ class Gateway:
             return interaction
 
         # State-aware routing
+        original_target_pid = f"{to_ns}/{to_name}"
         if not target.accepts_requests and not target.should_queue:
             reroute = target.reroute_target
             if reroute:
@@ -218,6 +223,11 @@ class Gateway:
             interaction.deadline = deadline
         interaction.status = Status.PENDING
 
+        # Track rerouting on the interaction
+        rerouted_pid = f"{to_ns}/{to_name}"
+        if rerouted_pid != original_target_pid:
+            interaction.rerouted_from = original_target_pid
+
         # Check delegation rules
         auto_delegate_rule = None
         for rule in target.delegation_rules:
@@ -225,15 +235,37 @@ class Gateway:
                 auto_delegate_rule = rule
                 break
 
+        if auto_delegate_rule:
+            interaction.matched_rule = auto_delegate_rule.name
+
         self._store.save(interaction)
+
+        # Audit: request_created
+        sender_pid = f"{from_namespace}/{from_name}" if from_name else "anonymous"
+        self._emit("request_created", interaction.id, sender_pid, {
+            "to": f"{to_ns}/{to_name}",
+            "question": question,
+            "response_type": response_type,
+            "priority": priority,
+        })
+
+        # Audit: request_rerouted
+        if interaction.rerouted_from:
+            self._emit("request_rerouted", interaction.id, "system", {
+                "from_target": interaction.rerouted_from,
+                "to_target": rerouted_pid,
+                "reason": f"target state: {self.get_participant(interaction.rerouted_from).current_state if self.get_participant(interaction.rerouted_from) else 'unknown'}",
+            })
 
         if auto_delegate_rule:
             logger.info("A2H auto-delegated: %s (rule: %s)", interaction.id, auto_delegate_rule.name)
+            self._emit("delegation_matched", interaction.id, "system", {
+                "rule_name": auto_delegate_rule.name,
+                "auto_response": auto_delegate_rule.auto_response,
+            })
             self.respond(interaction.id, auto_delegate_rule.auto_response, channel="auto_delegation")
-            # Ensure status is set to AUTO_DELEGATED instead of just ANSWERED
             interaction.status = Status.AUTO_DELEGATED
         else:
-            # Deliver (if not auto-delegated)
             await self._deliver(interaction)
 
         return interaction
@@ -271,6 +303,13 @@ class Gateway:
             except Exception as e:
                 logger.warning("A2H notification delivery failed (%s): %s", channel.name, e)
 
+        sender_pid = f"{from_namespace}/{from_name}" if from_name else "anonymous"
+        self._emit("notification_sent", notification.id, sender_pid, {
+            "to": f"{to_ns}/{to_name}",
+            "message": message[:200],
+            "severity": severity,
+        })
+
         return notification
 
     # ---- Human responds ----------------------------------------------------
@@ -302,6 +341,15 @@ class Gateway:
         if not ok:
             return {"success": False, "error": "Failed to record response"}
 
+        updated = self._store.get(interaction_id)
+        resp_time = compute_response_time(updated) if updated else None
+        self._emit("response_recorded", interaction_id, f"{interaction.to_namespace}/{interaction.to_name}", {
+            "channel": channel,
+            "response_type": interaction.response_type.value,
+            "response_data": response_data,
+            "response_time_seconds": resp_time,
+        })
+
         return {"success": True, "request_id": interaction_id, "status": "answered"}
 
     # ---- Cancel ------------------------------------------------------------
@@ -311,6 +359,9 @@ class Gateway:
         ok = self._store.cancel(interaction_id, reason)
         if not ok:
             return {"success": False, "error": "Cannot cancel"}
+        self._emit("request_cancelled", interaction_id, "system", {
+            "reason": reason,
+        })
         return {"success": True, "request_id": interaction_id, "status": "cancelled"}
 
     # ---- Query -------------------------------------------------------------
@@ -390,12 +441,30 @@ class Gateway:
             escalation=escalation,
         )
 
+    def _emit(self, event_type: str, interaction_id: str, actor: str, details: dict) -> None:
+        if self._audit is not None:
+            self._audit.record(AuditEvent(
+                event_type=event_type,
+                interaction_id=interaction_id,
+                actor=actor,
+                details=details,
+            ))
+
     async def _deliver(self, interaction: Interaction) -> None:
         for channel in self._channels:
             try:
                 await channel.deliver_request(interaction)
+                self._emit("request_delivered", interaction.id, "system", {
+                    "channel": channel.name,
+                    "success": True,
+                })
             except Exception as e:
                 logger.warning("A2H delivery failed (%s): %s", channel.name, e)
+                self._emit("request_delivered", interaction.id, "system", {
+                    "channel": channel.name,
+                    "success": False,
+                    "error": str(e),
+                })
 
     @staticmethod
     def _parse_pid(pid: str) -> tuple[str, str]:

@@ -17,6 +17,7 @@ Implementations add: Slack API calls, email sending, SMS gateways, etc.
 from __future__ import annotations
 
 import logging
+import subprocess
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
@@ -97,6 +98,14 @@ SMS_CAPABILITY = ChannelCapability(
     max_options=3, supports_context_card=False,
     supports_agent_identity_badge=False, response_latency="minutes",
     verification_method="phone_number", trust_level="medium",
+)
+
+MACOS_DIALOG_CAPABILITY = ChannelCapability(
+    channel_id="macos_dialog", display_name="macOS Dialog",
+    response_types=["choice", "approval", "text", "number", "confirm", "form"],
+    max_options=10, supports_context_card=True,
+    supports_agent_identity_badge=False, response_latency="seconds",
+    verification_method="local_session", trust_level="high",
 )
 
 
@@ -203,3 +212,149 @@ class DashboardChannel:
         logger.info("A2H DASHBOARD NOTIFY | %s | %s",
                      notification.id, notification.message[:60])
         return True
+
+
+class MacDialogChannel:
+    """macOS native dialog boxes for interactive A2H responses.
+
+    Uses ``osascript`` to show alerts, list pickers, and text input
+    dialogs. Collects the human's response and calls
+    ``gateway.respond()`` immediately.
+
+        gw = Gateway()
+        dialog = MacDialogChannel(gw)
+        gw._channels.append(dialog)
+    """
+
+    def __init__(self, gateway):
+        self._gw = gateway
+
+    @property
+    def name(self) -> str:
+        return "macos_dialog"
+
+    @property
+    def capability(self) -> ChannelCapability:
+        return MACOS_DIALOG_CAPABILITY
+
+    async def deliver_request(self, interaction: Interaction) -> bool:
+        rt = interaction.response_type.value
+        question = interaction.question[:500]
+        context_lines = self._format_context(interaction.context)
+        full_text = f"{question}\n\n{context_lines}" if context_lines else question
+        is_critical = interaction.priority.value == "critical"
+
+        if rt == "approval":
+            result = self._alert(full_text, buttons=["Reject", "Approve"], critical=is_critical)
+            if result is not None:
+                approved = result == "Approve"
+                self._gw.respond(interaction.id, {"approved": approved}, channel="macos_dialog")
+
+        elif rt == "confirm":
+            result = self._alert(full_text, buttons=["No", "Yes"], critical=is_critical)
+            if result is not None:
+                confirmed = result == "Yes"
+                self._gw.respond(interaction.id, {"confirmed": confirmed}, channel="macos_dialog")
+
+        elif rt == "choice":
+            labels = [o.label for o in interaction.options]
+            result = self._choose_from_list(full_text, labels)
+            if result is not None:
+                matched = next((o for o in interaction.options if o.label == result), None)
+                value = matched.value if matched else result
+                self._gw.respond(interaction.id, {"value": value}, channel="macos_dialog")
+
+        elif rt == "text":
+            result = self._text_input(full_text)
+            if result is not None:
+                self._gw.respond(interaction.id, {"text": result}, channel="macos_dialog")
+
+        elif rt == "number":
+            result = self._text_input(full_text)
+            if result is not None:
+                try:
+                    value = float(result)
+                    self._gw.respond(interaction.id, {"value": value}, channel="macos_dialog")
+                except ValueError:
+                    logger.warning("MacDialogChannel: invalid number input '%s'", result)
+
+        elif rt == "form":
+            fields = {}
+            form_fields = interaction.context.get("form_fields", interaction.context.get("fields", []))
+            if isinstance(form_fields, list):
+                for field_def in form_fields:
+                    field_name = field_def if isinstance(field_def, str) else field_def.get("name", "")
+                    label = field_def if isinstance(field_def, str) else field_def.get("label", field_name)
+                    result = self._text_input(f"{question}\n\nField: {label}")
+                    if result is None:
+                        return True
+                    fields[field_name] = result
+            else:
+                result = self._text_input(full_text)
+                if result is not None:
+                    fields["response"] = result
+            if fields:
+                self._gw.respond(interaction.id, {"fields": fields}, channel="macos_dialog")
+
+        return True
+
+    async def deliver_notification(self, notification: Notification) -> bool:
+        message = notification.message[:150].replace('"', '\\"')
+        severity = notification.severity.upper()
+        subprocess.run([
+            "osascript", "-e",
+            f'display notification "{message}" with title "A2H [{severity}]"'
+        ], check=False)
+        return True
+
+    @staticmethod
+    def _escape(text: str) -> str:
+        return text.replace('\\', '\\\\').replace('"', '\\"')
+
+    def _alert(self, message: str, buttons: list[str], critical: bool = False) -> str | None:
+        msg = self._escape(message)
+        btn_list = ", ".join(f'"{b}"' for b in buttons)
+        default = f'default button "{buttons[-1]}"'
+        crit = " as critical" if critical else ""
+        script = f'display alert "A2H Request" message "{msg}" buttons {{{btn_list}}} {default}{crit}'
+        return self._run_osascript(script, parse="button returned:")
+
+    def _choose_from_list(self, message: str, items: list[str]) -> str | None:
+        msg = self._escape(message)
+        item_list = ", ".join(f'"{self._escape(i)}"' for i in items)
+        script = f'choose from list {{{item_list}}} with prompt "{msg}" with title "A2H Choice"'
+        result = self._run_osascript(script)
+        if result and result != "false":
+            return result
+        return None
+
+    def _text_input(self, message: str) -> str | None:
+        msg = self._escape(message)
+        script = f'display dialog "{msg}" default answer "" with title "A2H Input"'
+        return self._run_osascript(script, parse="text returned:")
+
+    @staticmethod
+    def _run_osascript(script: str, parse: str | None = None) -> str | None:
+        try:
+            result = subprocess.run(
+                ["osascript", "-e", script],
+                capture_output=True, text=True, timeout=300,
+            )
+            if result.returncode != 0:
+                return None
+            output = result.stdout.strip()
+            if parse and parse in output:
+                return output.split(parse, 1)[1].strip()
+            return output
+        except subprocess.TimeoutExpired:
+            return None
+
+    @staticmethod
+    def _format_context(context: dict) -> str:
+        if not context:
+            return ""
+        lines = []
+        for k, v in list(context.items())[:6]:
+            if not isinstance(v, (dict, list)):
+                lines.append(f"{k}: {v}")
+        return "\n".join(lines)
