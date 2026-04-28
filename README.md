@@ -455,3 +455,46 @@ Check out the interactive HTML demos to see A2H in action:
 - [Patient Care Demo](https://intelligence-advantage.com/a2h/demo-patient.html)
 - [Real Estate Demo](https://intelligence-advantage.com/a2h/demo-real-estate.html)
 - [Supply Chain Demo](https://intelligence-advantage.com/a2h/demo-supply-chain.html)
+
+## TypeScript Implementation
+
+A full implementation of the A2H protocol is also available in TypeScript.
+
+### Installation
+
+Navigate to the TypeScript source directory and install the dependencies:
+
+```bash
+cd src/typescript
+npm install
+npm run build
+```
+
+### Usage
+
+```typescript
+import { Gateway, Participant } from './dist/index.js';
+
+// 1. Create gateway
+const gw = new Gateway({ registryMode: "strict" });
+
+// 2. Register participants
+gw.register(new Participant({
+    name: "sales-agent",
+    namespace: "ai",
+    type: "agent"
+}));
+
+// 3. Agent asks human
+const request = await gw.ask("sales/sarah", {
+    question: "Approve the MegaInc deal at $2.5M?",
+    responseType: "choice",
+    options: [
+        { label: "Approve", value: "approve" },
+        { label: "Reject", value: "reject" }
+    ],
+    from: "ai/sales-agent"
+});
+```
+
+See the full source code in [`src/typescript/`](src/typescript/).
