@@ -1,36 +1,36 @@
-# A2H — Agent-to-Human Interaction Protocol
+# A2H — Agent-to-Human Protocol
 
-**The missing piece for human-agent collaboration.**
+**One-sentence summary:** A2H is a lightweight, structured protocol that allows AI agents to ask humans questions, get async responses, set deadlines, escalate, and auto-delegate.
 
-[A2A](https://github.com/google/A2A) defined how agents talk to agents. [MCP](https://modelcontextprotocol.io) defined how agents use tools. **A2H defines how agents talk to humans** — structured questions, async responses, deadlines, escalation, and auto-delegation.
+**Status:** Open source | Actively maintained | Used in production
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                                                             │
-│               THE COLLABORATION STACK                       │
-│                                                             │
-│    ┌─────────┐    A2A     ┌─────────┐    MCP    ┌───────┐  │
-│    │  Agent  │◄──────────►│  Agent  │──────────►│ Tool  │  │
-│    └────┬────┘            └─────────┘           └───────┘  │
-│         │                                                   │
-│         │  A2H (this protocol)                              │
-│         │  structured questions                             │
-│         │  async responses                                  │
-│         │  deadlines + escalation                           │
-│         │  auto-delegation                                  │
-│         ▼                                                   │
-│    ┌─────────┐                                              │
-│    │  Human  │  responds via dashboard / Slack / email      │
-│    └────┬────┘                                              │
-│         │                                                   │
-│         │  H2A (A2A from a UI — not a separate protocol)    │
-│         │  human delegates work to agents                   │
-│         ▼                                                   │
-│    ┌─────────┐                                              │
-│    │  Agent  │  executes the task using MCP tools            │
-│    └─────────┘                                              │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+## Quick Start (Copy-Paste Friendly)
+
+```python
+from a2h import Gateway, Participant, EscalationChain, EscalationLevel
+
+# 1. Create gateway
+gw = Gateway(registry_mode="strict")
+
+# 2. Agent asks human
+request = await gw.ask(
+    to="sales/sarah",
+    question="Approve the MegaInc deal at $2.5M?",
+    response_type="choice",
+    options=[
+        {"label": "Approve", "value": "approve"},
+        {"label": "Reject", "value": "reject"},
+    ],
+    deadline="4h",
+    escalation=EscalationChain(levels=[
+        EscalationLevel(target="sales/sarah", timeout_minutes=240),
+        EscalationLevel(target="sales/tom", timeout_minutes=480)
+    ]),
+    from_participant="ai/sales-agent"
+)
+
+# 3. Human responds
+gw.respond(request.id, {"value": "approve", "text": "Good fit."})
 ```
 
 ## Why A2H?
